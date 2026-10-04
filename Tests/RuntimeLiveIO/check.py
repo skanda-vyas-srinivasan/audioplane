@@ -114,7 +114,13 @@ class NativeAcceptance:
         samples = [value[0] for frame in frames for value in struct.iter_unpack('<h', frame.data)]
         peak = max(map(abs, samples))
         packet_peaks = [max(abs(v[0]) for v in struct.iter_unpack('<h', f.data)) for f in frames]
-        frequency = sum(a <= 0 < b for a, b in zip(samples, samples[1:])) * frames[0].format.sample_rate / len(samples)
+        # The first audible packet may start midway through a HAL callback.
+        # Trim only quiet edges for frequency estimation, never internal gaps.
+        first_signal = next((i for i, value in enumerate(samples) if abs(value) > 30), len(samples))
+        last_signal = next((i for i in range(len(samples) - 1, -1, -1) if abs(samples[i]) > 30), -1)
+        signal = samples[first_signal:last_signal + 1]
+        frequency = (sum(a <= 0 < b for a, b in zip(signal, signal[1:]))
+                     * frames[0].format.sample_rate / len(signal)) if signal else 0
         valid = all(value > 30 for value in packet_peaks) and abs(frequency - expected_hz) < 15
         valid = valid and all(f.dropped_frames_before == 0 for f in frames)
         if not valid:
@@ -124,6 +130,7 @@ class NativeAcceptance:
                    dropped=[f.dropped_frames_before for f in frames])
         assert valid, (peak, frequency, expected_hz)
         return dict(packets=len(frames), peak=peak, measured_hz=round(frequency, 1),
+                    leading_quiet_samples=first_signal,
                     source=frames[0].source_id, stream=frames[0].stream_id)
 
     @staticmethod

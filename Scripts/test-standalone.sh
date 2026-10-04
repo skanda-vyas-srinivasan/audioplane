@@ -21,6 +21,8 @@ fi
 "$ROOT_DIR/Scripts/test-runtime-stress.sh"
 "$ROOT_DIR/Scripts/test-runtime-output-tsan.sh"
 "$ROOT_DIR/Scripts/test-python-sdk.sh"
+PYTHONPATH="$ROOT_DIR/SDKs/python/src${PYTHONPATH:+:$PYTHONPATH}" \
+    /usr/bin/python3 -B -m unittest discover -s "$ROOT_DIR/Tests/RuntimeLiveIO" -p 'test_*.py'
 "$ROOT_DIR/Scripts/test-agent-torture.sh"
 "$ROOT_DIR/Scripts/test-runtime-examples.sh"
 "$ROOT_DIR/Scripts/test-runtime-packages.sh"
