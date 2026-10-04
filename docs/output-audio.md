@@ -107,6 +107,10 @@ Timestamps are producer-supplied stream-relative presentation coordinates.
 When omitted, SDKs derive contiguous timestamps. Runtime renders packets in
 arrival order and counts decreasing timestamps as late; it does not wait for an
 absolute wall clock or claim synchronization with independent capture streams.
+`late_frames` counts input sample frames in packets whose timestamps decrease;
+it is not an elapsed-time or network-lateness measurement. A discontinuity flag
+alone does not imply lateness and does not increment this counter. Flush starts
+a new sequence/timestamp epoch while preserving cumulative session metrics.
 
 ## Backpressure and jitter policy
 
@@ -120,8 +124,11 @@ All queues are bounded:
    stalled, only the newest tail that cannot fit is dropped and counted.
 
 The target buffer is configurable from 20–250 ms (60 ms by default). Playback
-starts only after that target is available. After an underrun empties the ring,
-rendering returns silence and re-primes to the target before resuming. This
+starts when that target is available or the partial-buffer priming deadline
+expires. The deadline is the target buffer duration, observed by the worker's
+50 ms metrics timer; a short response does not need to await EOS. After an
+underrun empties the ring, rendering returns silence and uses the same bounded
+priming policy before resuming. This
 absorbs ordinary model packet jitter without unbounded latency. EOS overrides
 the start gate so a short response still drains. Runtime bounds EOS drain to
 two seconds.

@@ -75,7 +75,6 @@ public final class RuntimeOutputCoordinator: @unchecked Sendable {
         var retiredPacketsReceived: UInt64 = 0
         var retiredInputFramesReceived: UInt64 = 0
         var retiredInputBytesReceived: UInt64 = 0
-        var retiredDiscontinuities: UInt64 = 0
 
         init(id: String, destinationID: String, ownerID: String, startedAt: UInt64,
              format: RuntimePCMFormatDTO, targetBufferMilliseconds: UInt32,
@@ -311,7 +310,6 @@ public final class RuntimeOutputCoordinator: @unchecked Sendable {
             resources.0.retiredPacketsReceived &+= retired.packetsReceived
             resources.0.retiredInputFramesReceived &+= retired.inputFramesReceived
             resources.0.retiredInputBytesReceived &+= retired.inputBytesReceived
-            resources.0.retiredDiscontinuities &+= retired.discontinuitiesReceived
             resources.0.state = .ready
             return snapshot(resources.0)
         }
@@ -567,8 +565,9 @@ public final class RuntimeOutputCoordinator: @unchecked Sendable {
             deviceFramesRendered: backendMetrics.deviceFramesRendered,
             droppedFrames: backendMetrics.droppedFrames,
             flushedFrames: backendMetrics.flushedFrames,
-            lateFrames: backendMetrics.lateFrames &+ record.retiredDiscontinuities
-                &+ plane.discontinuitiesReceived,
+            // Only the backend measures late sample frames. Transport
+            // discontinuities count packets and must not change these units.
+            lateFrames: backendMetrics.lateFrames,
             underrunFrames: backendMetrics.underrunFrames,
             underrunEvents: backendMetrics.underrunEvents,
             overrunEvents: backendMetrics.overrunEvents,
