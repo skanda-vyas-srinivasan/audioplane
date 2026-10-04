@@ -544,6 +544,45 @@ sampled off the realtime callback.
   local engineering identity, not a substitute for Developer ID signing and
   notarization of a public distribution.
 
+## Native audio acceptance tests
+
+`Scripts/test-runtime-live-io.sh` is an explicit opt-in test of real Process
+Taps and an installed loopback input using public Python SDK APIs. It requires
+a logged-in GUI session, Process Tap permission, and the signed development
+Runtime. It plays two quiet generated tones, but never opens a physical
+microphone, persists captured PCM, contacts providers, installs a driver, or
+changes system routes. Only its own temporary Runtime and fixture apps are
+terminated, including the Runtime used for its SIGKILL/restart test.
+
+```sh
+./Scripts/build-signed-runtime-dev.sh
+./Scripts/test-runtime-live-io.sh
+./Scripts/test-runtime-live-io.sh --loopback-uid BlackHole2ch_UID
+# Check both installed loopback devices in one run:
+./Scripts/test-runtime-live-io.sh \
+  --loopback-uid com.audioplane.input.device --loopback-uid BlackHole2ch_UID
+```
+
+Output is one JSON result per check. The test verifies source labels and
+distinct stream IDs, monotonic sequence/timestamps, steady tone identity,
+absence of whole silent packets and reported drops in the checked steady
+segment, loopback nonzero audio, session cleanup, and explicit reconnect after
+a Runtime crash. This is not certification of Bluetooth fidelity, full-duration
+audio quality, or every macOS/device combination.
+
+Source presence and `producing_audio` are not proof that the next packet has a
+nonzero signal. During a fixture relaunch, leading silent packets were observed
+before its tone began. The test reports this startup silence, requires a signal
+within three seconds, then checks the steady segment without skipping internal
+silence. Source events are one-second discovery snapshots, not a lossless
+process audit: an exit/relaunch entirely between snapshots can appear as a
+`source_updated` event. The acceptance test waits for a removal event before
+relaunching when testing removal delivery specifically.
+
+Set `AUDIOPLANE_TEST_LIVE_IO=1` to include native acceptance in
+`Scripts/test-runtime-release.sh`; AudioPlane Input must already be installed.
+Hardware device changes and explicit permission-denial UI remain manual tests.
+
 ## Troubleshooting
 
 - `connect failed: No such file or directory`: start `sonexis-runtime` or pass the matching socket path.

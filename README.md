@@ -363,8 +363,27 @@ The release gate covers Runtime protocol/core/output/integration/fuzz/stress
 tests, Thread Sanitizer, Python tests and packaging, TypeScript tests and
 packaging, more than one million deterministic agent-pipeline state
 transitions, embedded permission metadata, stable identifiers, and development
-signing. Live Process Tap capture and audible physical-device output still
-require manual macOS validation.
+signing. Real Process Tap acceptance is available separately on a logged-in Mac
+with capture permission and an installed loopback device:
+
+```bash
+./Scripts/test-runtime-live-io.sh
+# Or use BlackHole instead of AudioPlane Input:
+./Scripts/test-runtime-live-io.sh --loopback-uid BlackHole2ch_UID
+# Increase synthetic lifecycle churn to 10,000 capture and output cycles:
+./Scripts/test-runtime-soak.sh
+```
+
+The native acceptance test starts its own signed Runtime and two temporary
+quiet-tone apps. It exercises independent captures, multiple clients, labels,
+source exit/relaunch, duplex, flush, actual loopback, and SIGKILL/restart
+recovery. It uses public SDK APIs, never opens a physical microphone, never
+persists captured PCM, never calls a provider, and never installs a driver or
+changes the system's selected devices. It requires an existing signed build;
+run `./Scripts/build-signed-runtime-dev.sh` first if needed. To opt it into the
+complete release gate, set `AUDIOPLANE_TEST_LIVE_IO=1` (AudioPlane Input must
+already be installed). Audible physical-device output, hardware unplug/rate
+changes, and receiving-app interoperability still need manual validation.
 
 ## Security and privacy
 

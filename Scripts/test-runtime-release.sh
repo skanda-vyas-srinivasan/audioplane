@@ -4,6 +4,9 @@ set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 "$ROOT_DIR/Scripts/test-standalone.sh"
 "$ROOT_DIR/Scripts/build-signed-runtime-dev.sh"
+if [ "${AUDIOPLANE_TEST_LIVE_IO:-0}" = "1" ]; then
+    "$ROOT_DIR/Scripts/test-runtime-live-io.sh"
+fi
 "$ROOT_DIR/Scripts/build-audioplane-input-dev.sh"
 
 RUNTIME="$ROOT_DIR/.build/signed-dev/bin/sonexis-runtime"
