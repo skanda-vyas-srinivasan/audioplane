@@ -1,34 +1,25 @@
-# Sonexis Runtime v1.0
+# AudioPlane Runtime v1.0
 
 ## Purpose
 
-Sonexis Runtime is a local macOS audio service for developer and AI tools. A
+AudioPlane Runtime is a local macOS audio service for developer and AI tools. A
 separate process can discover and capture application audio and can send framed
 realtime PCM back to normal or virtual macOS output devices without using Core
-Audio. v0.4 adds a bounded client-to-Runtime data plane, HAL playback, output
-destinations/sessions/events/diagnostics, Python and TypeScript output APIs,
-duplex composition, deterministic output replay, and provider-response
-playback while preserving v0.3's source-aware input APIs. v0.5 adds an explicit
-per-user development install, foreground/background lifecycle tooling, locally
-buildable SDK artifacts, focused examples, synchronized version checks, and
-actionable connection errors without changing protocol or audio semantics.
-v0.6 made output destinations first-class lifecycle resources: stable resolved
-device identity, add/remove/update/default-change events, exact SDK/CLI name
-resolution, wait helpers, advisory loopback feedback risk, stricter HAL format
-validation, and route changes that backpressure writers instead of terminating
-an otherwise healthy output session. v0.7 adds provider-neutral activity edges,
-source-correlated provider responses, resilient labeled multi-source
-consumption, and a safer structured MCP control surface without changing
-protocol v2 or either PCM data plane. v0.8 hardens lifecycle, diagnostics,
-socket migration, cancellation, and long-running resource accounting. v0.9
-inventoried and froze the public surface; 1.0 promotes that provider-neutral
-surface to the documented compatibility policy and retains reproducible local
-release artifacts with bounded integrity and metadata verification.
+Audio. The native Runtime owns capture, conversion, playback, device/session
+lifecycle and bounded local IPC. Python/Node clients supply application policy;
+optional AI adapters remain above the Runtime. Neither the Sonexis consumer
+app nor a sibling engine checkout is required.
+
+Start with [getting started](getting-started.md) for installation and first
+audio, and [developer workflows](developer-workflows.md) for realtime streaming
+versus complete-clip analysis. This guide documents native lifecycle and the
+protocol. Earlier milestone reports are historical records, not current commands.
 
 The Runtime is audio infrastructure. It does not provide transcription, models,
 cloud transport, authentication, accounts, or acoustic echo cancellation, and
-it never opens a TCP port. It can target an installed virtual loopback device;
-it does not install a Sonexis-branded driver.
+it never opens a TCP port. It can target an installed virtual loopback device.
+The repository includes a separately built AudioPlane Input HAL driver, whose
+installation is explicit and optional; normal Runtime setup does not install it.
 
 ## Zero-to-audio development quickstart
 
@@ -40,9 +31,9 @@ standalone repository:
 ./Scripts/runtime-dev.sh start
 "$HOME/Library/Application Support/SonexisRuntime/dev/bin/sonexisctl" sources
 
-/usr/bin/python3 -m venv --system-site-packages .venv-runtime
+python3 -m venv .venv-runtime
 . .venv-runtime/bin/activate
-python -m pip install --no-deps --no-build-isolation -e SDKs/python
+python -m pip install ./SDKs/python
 python Examples/capture-one-source.py "Google Chrome" --frames 16000
 ```
 
@@ -120,8 +111,8 @@ The Runtime executable embeds `NSAudioCaptureUsageDescription`, uses the stable
 identifier `com.sonexis.runtime`, and is development-signed using the identity
 configured in Xcode and selected by the build script. Live
 capture uses that identity for macOS Screen & System Audio Recording
-permission. The Sonexis application and Runtime have separate permission
-identities.
+permission. This standalone product retains the signing identity and executable
+names for compatibility; it has no dependency on the Sonexis application.
 
 The first `capture` may trigger the macOS prompt. Core Audio does not provide a
 reliable permission-specific status for every Process Tap failure, so a denied
@@ -268,7 +259,9 @@ The default is PCM16 little-endian, mono, 16 kHz. The handshake advertises the e
 - PCM16 stereo at 48 kHz;
 - Float32 little-endian mono or stereo at 48 kHz.
 
-Formats are interleaved. Requests must match one advertised combination exactly; otherwise `unsupported_format` includes a compact supported-format list. Conversion uses AVAudioConverter on the capture worker and does not alter the Sonexis app’s native DSP path.
+Formats are interleaved. Requests must match one advertised combination exactly;
+otherwise `unsupported_format` includes a compact supported-format list.
+Conversion uses AVAudioConverter on the capture worker, not on the audio callback.
 
 A capture has distinct session and stream UUIDs. The session owns capture lifecycle; the stream identifies binary packets. Session states are `starting`, `capturing`, `stopped`, and `failed`. Stop is idempotent. Control disconnect stops and removes that client’s captures. A source/process or default-output change rebuilds the capture pipeline with the external session ID preserved and marks the next PCM packet discontinuous. Failure is terminal and carries a structured error.
 
@@ -388,9 +381,9 @@ python -m pip install --no-deps --no-build-isolation -e SDKs/python
 ```
 
 ```python
-from sonexis import Sonexis
+from audioplane import AudioPlane
 
-async with Sonexis() as sx:
+async with AudioPlane() as sx:
     async with await sx.capture("Discord") as stream:
         async for frame in stream:
             print(frame.source.name, frame.session_id, frame.timestamp_ns)
@@ -597,8 +590,9 @@ Hardware device changes and explicit permission-denial UI remain manual tests.
   may have disconnected or changed UID.
 - Repeated output underruns: increase `--target-buffer-ms`, reduce producer
   jitter, and inspect queue/overrun metrics before increasing it again.
-- Loopback missing: install/validate it with the vendor's tooling and reboot if
-  required; Sonexis does not install a HAL driver.
+- Loopback missing: install/validate BlackHole with its vendor's tooling, or
+  follow the explicit [AudioPlane Input guide](audioplane-input-manual-validation.md).
+  Normal Runtime setup never installs a HAL driver or changes default devices.
 
 ## Known limitations
 
@@ -612,11 +606,14 @@ Hardware device changes and explicit permission-denial UI remain manual tests.
 - Same-source captures use independent Process Taps and are not deduplicated.
 - Event sockets and data sockets rely on private per-user filesystem paths rather than a separate attach-token preface.
 - The server uses one bounded blocking worker per control client; limits prevent exhaustion, but a future service transport should use nonblocking connection state machines.
-- The existing app shares low-level capture infrastructure but does not use the capture-only Runtime session owner.
-- SDK packages are repository-local and unpublished. Authenticated Gemini input
-  and output-transcription behavior was validated in v0.3; generated response
-  audio routed through the new v0.4 playback plane still requires the manual
-  validation guide. The official MCP dependency was imported and its tool
+- The engine is repository-owned code; there is no build/runtime dependency on
+  the Sonexis consumer app or another checkout.
+- SDK packages are repository-local and unpublished. Authenticated Gemini input,
+  output transcription and response playback have been exercised in supervised
+  live sessions; this is not qualification across all devices, accounts or
+  network conditions. Use the [current workflow evidence](developer-workflows-validation.md)
+  and manual matrix rather than assuming historical release reports certify
+  this checkout. The official MCP dependency was imported and its tool
   schemas were validated, but no third-party MCP host was used end to end.
 - Protocol v2 retains numeric JSON values for compatibility, but every public
   nanosecond/counter field that can exceed JavaScript's safe integer range now
@@ -625,8 +622,10 @@ Hardware device changes and explicit permission-denial UI remain manual tests.
 - Protocol v2 began as the developer-preview contract and is now the stable
   1.0 wire contract. Future incompatible changes require a new protocol version
   rather than adding required v2 fields.
-- The current Runtime has generic loopback-device routing but no bundled `Sonexis Agent Input`
-  driver. See [virtual device design](virtual-audio-device-design.md).
+- The first-party AudioPlane Input driver is built and installed separately.
+  Live tests against an already installed driver do not certify every newly
+  built driver or receiving app. See [AudioPlane Input design](audioplane-input-design.md)
+  and its [manual acceptance guide](audioplane-input-manual-validation.md).
 - Sonexis prevents an internal digital loop for process-specific capture but
   does not implement acoustic echo cancellation, automatic muting, or ducking.
 

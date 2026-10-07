@@ -17,19 +17,20 @@ Chrome / Discord / Spotify          Generated audio
              +------ AudioPlane ----------+
                          |
                          v
-                Python / TypeScript / MCP
+                Python / Node.js SDKs
 ```
 
 AudioPlane is local infrastructure, not an AI assistant or transcription
 service. Provider adapters for Gemini Live and OpenAI Realtime live above the
 Runtime and use the same public audio APIs as any other client.
+The optional MCP interface is control-only; realtime PCM never flows through MCP.
 
 ## What works
 
 - Per-application capture through macOS Core Audio Process Taps
 - Physical-microphone discovery and capture through the same source API
 - Stable source identity with application name, bundle identifier, and PID
-- PCM16 and Float32; mono or stereo; 16, 24, and 48 kHz
+- PCM16 mono at 16/24/48 kHz and stereo at 48 kHz; Float32 mono/stereo at 48 kHz
 - Timestamped, sequenced binary PCM frames with discontinuity/drop metadata
 - Multiple simultaneous sources, sessions, and clients
 - Default-device, physical-device, and installed loopback playback
@@ -55,6 +56,11 @@ this standalone repository, not links to another product.
 
 ## Quickstart
 
+Start with the [step-by-step getting started guide](docs/getting-started.md).
+It separates native Runtime setup from SDK installation and verifies first
+audio before adding a provider. For application design, see
+[realtime vs. capture-then-analysis](docs/developer-workflows.md).
+
 Clone the repository:
 
 ```bash
@@ -79,8 +85,7 @@ permission for that same signed Runtime.
 Install the developer CLI with `pipx`:
 
 ```bash
-pipx install \
-  "git+https://github.com/skanda-vyas-srinivasan/audioplane.git#subdirectory=SDKs/python"
+pipx install ./SDKs/python
 
 audioplane version
 audioplane doctor
@@ -100,8 +105,7 @@ Install the SDK in a virtual environment:
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install \
-  "git+https://github.com/skanda-vyas-srinivasan/audioplane.git#subdirectory=SDKs/python"
+python -m pip install ./SDKs/python
 ```
 
 Then capture an application by exact name, source ID, bundle identifier, PID,
@@ -130,6 +134,10 @@ asyncio.run(main())
 
 Human-readable names are accepted only when they resolve uniquely. AudioPlane
 returns a structured ambiguity error instead of silently choosing a process.
+
+Capture is application-wide, not browser-tab-specific. Pause other audible
+Chrome tabs before analyzing a single video. AudioPlane supplies PCM, not
+website transcripts or video frames.
 
 For raw PCM validation, use the installed native diagnostic CLI:
 
@@ -299,13 +307,31 @@ configuration and are never embedded in the Runtime. See
 [AI integration](docs/ai-integration.md) for Gemini hybrid-VAD turn handling,
 OpenAI Realtime, response playback, and source-aware multi-stream examples.
 
+Your application chooses when to use captured audio:
+
+- **Realtime:** forward frames as they arrive to a live model or other consumer.
+- **Capture then analyze:** collect a bounded clip, then request a complete review.
+
+For the second workflow, install the Gemini extra with Python 3.10+ and run:
+
+```bash
+python Examples/capture-and-review.py \
+  --source "Google Chrome" --duration 205
+```
+
+Set `GEMINI_API_KEY` first using the hidden prompt in
+[getting started](docs/getting-started.md#review-a-complete-clip). The example
+keeps audio in memory and prints a review; it saves no PCM. Add `--capture-only`
+for a no-key, no-cloud first-audio check. See [workflow details](docs/developer-workflows.md).
+
 The installed CLI exposes that same implementation directly:
 
 ```bash
 audioplane agent \
   --provider gemini \
+  --gemini-model gemini-3.8-live \
   --source "Google Chrome" \
-  --response-output coreaudio:com.audioplane.input.device \
+  --response-output default \
   --gemini-barge-in \
   --validate-live \
   --debug

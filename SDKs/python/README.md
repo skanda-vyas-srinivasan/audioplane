@@ -70,9 +70,9 @@ applications and examples.
 
 ```sh
 cd /path/to/audioplane
-/usr/bin/python3 -m venv --system-site-packages .venv
+python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install --no-deps --no-build-isolation -e SDKs/python
+python -m pip install -e ./SDKs/python
 python -c 'import audioplane; print(audioplane.__version__)'
 ```
 
@@ -90,12 +90,16 @@ PYTHONPATH="$PWD/SDKs/python/src" /usr/bin/python3 -m unittest discover \
 
 ## Capture one application
 
+Start with [getting started](../../docs/getting-started.md) for permissions and
+separate Runtime installation. Choose [realtime or capture-then-analysis](../../docs/developer-workflows.md)
+based on your application; neither requires implementing Core Audio.
+
 ```python
 import asyncio
-from sonexis import Sonexis
+from audioplane import AudioPlane
 
 async def main():
-    async with Sonexis() as sx:
+    async with AudioPlane() as sx:
         async with await sx.capture("Discord") as stream:
             async for frame in stream:
                 print(frame.source.name, frame.timestamp_ns, len(frame.data))
@@ -107,7 +111,7 @@ asyncio.run(main())
 
 Use context managers as the canonical ownership boundary:
 
-- `async with Sonexis() as sx` owns the control connection and closes every
+- `async with AudioPlane() as sx` owns the control connection and closes every
   capture, output, and event subscription it created.
 - Capture and playback perform an asynchronous Runtime request first, so write
   `async with await sx.capture(...)` and
@@ -151,10 +155,10 @@ The Runtime, rather than the Python process, owns the selected output device:
 
 ```python
 import asyncio
-from sonexis import AudioFormat, Sonexis
+from audioplane import AudioFormat, AudioPlane
 
 async def play(model_audio):
-    async with Sonexis() as sx:
+    async with AudioPlane() as sx:
         async with await sx.playback(
             destination="default",
             format=AudioFormat.openai_realtime_output(),
@@ -208,7 +212,7 @@ creation-time destination snapshot after a default-device change.
 Capture and output can also be owned together without imposing agent policy:
 
 ```python
-async with Sonexis() as sx:
+async with AudioPlane() as sx:
     async with sx.duplex(
         "Discord",
         input_format=AudioFormat.gemini_live(),
@@ -228,11 +232,11 @@ format on both sides. Real model output must instead match `output_format`:
 
 ```python
 import asyncio
-from sonexis import AudioFormat, Sonexis
+from audioplane import AudioFormat, AudioPlane
 
 async def main():
     format = AudioFormat.speech_16k()
-    async with Sonexis() as sx:
+    async with AudioPlane() as sx:
         async with sx.duplex(
             "Discord", input_format=format, output_format=format
         ) as session:
@@ -243,7 +247,7 @@ async def main():
 asyncio.run(main())
 ```
 
-Use headphones for passthrough/duplex experiments; Sonexis does not implement
+Use headphones for passthrough/duplex experiments; AudioPlane does not implement
 acoustic echo cancellation.
 
 The output data plane uses the same 64-byte SXPC v2 PCM envelope as capture,
@@ -253,7 +257,7 @@ control requests.
 ## Multiple labeled sources
 
 ```python
-async with Sonexis() as sx:
+async with AudioPlane() as sx:
     async with sx.session() as group:
         await group.add("conversation", "Discord")
         await group.add("media", "Spotify")
@@ -275,7 +279,7 @@ long-running members and inspect `errors_by_label` when one source ends.
 ## Format presets
 
 ```python
-from sonexis import AudioFormat
+from audioplane import AudioFormat
 
 AudioFormat.speech_16k()
 AudioFormat.openai_realtime()  # PCM16 mono, 24 kHz
@@ -312,7 +316,7 @@ from audioplane.providers import GeminiLiveSink, GeminiTurnDetectionConfig
 
 async with AudioPlane() as sx:
     turns = GeminiTurnDetectionConfig(silence_duration_ms=1200)
-    async with await GeminiLiveSink.connect(turn_detection=turns) as model:
+    async with await GeminiLiveSink.connect(model="gemini-3.8-live", turn_detection=turns) as model:
         async with await sx.capture(
             "Google Chrome", format=AudioFormat.gemini_live()
         ) as stream:
@@ -320,8 +324,19 @@ async with AudioPlane() as sx:
                 await model.send_audio(frame)
 ```
 
+This fragment shows the send path only. Consume `model.events()` concurrently
+to receive text/audio and surface provider failures; the [runnable streaming
+example](../../docs/developer-workflows.md#realtime-process-while-the-source-plays)
+and packaged `audioplane agent` do that. A provider stall can backpressure direct
+forwarding; use the packaged bounded pipeline for conversational behavior.
+
+For a complete recording review, run
+`python Examples/capture-and-review.py --source "Google Chrome" --duration 205`
+from a checkout with the Gemini extra installed and the key exported. It uses
+captured audio directly, not a website transcript, and retains PCM in memory.
+
 OpenAI reads `OPENAI_API_KEY`; Gemini reads `GEMINI_API_KEY` and optionally
-`GEMINI_LIVE_MODEL`. Each sink accepts one ordered Sonexis stream; create one
+`GEMINI_LIVE_MODEL`. Each sink accepts one ordered AudioPlane stream; create one
 sink per source label. No adapter logs or persists audio or credentials. Network
 behavior must be validated with the developer's own provider account.
 
@@ -357,6 +372,7 @@ entry point installed by the wheel:
 ```sh
 audioplane agent \
   --provider gemini \
+  --gemini-model gemini-3.8-live \
   --source "Google Chrome" \
   --response-output coreaudio:com.audioplane.input.device \
   --gemini-barge-in \
@@ -380,7 +396,7 @@ does not claim to detect speech. Applications may implement the
 `activity_started` / `activity_ended` edges with source/session/stream context.
 It runs on the consuming task, resets on discontinuities, and accepts an
 optional `VoiceActivityDetector` for speech-aware classification. Use one
-detector per Sonexis stream; `reset()` clears debounce state but deliberately
+detector per AudioPlane stream; `reset()` clears debounce state but deliberately
 retains stream affinity.
 
 `LatencyTracker` keeps a bounded sample window and reports p50/p95/p99 estimates
@@ -402,7 +418,7 @@ Capture tools are not registered unless the server is launched with
 never carries PCM. Attach an audio process through the binary data plane:
 
 ```python
-async with Sonexis() as sx:
+async with AudioPlane() as sx:
     async with await sx.attach_capture(session_id) as stream:
         async for frame in stream:
             ...

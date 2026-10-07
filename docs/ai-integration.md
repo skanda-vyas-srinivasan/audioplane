@@ -1,8 +1,8 @@
-# Building AI audio applications with Sonexis
+# Building AI audio applications with AudioPlane
 
 ## Boundary
 
-Sonexis supplies local, source-aware audio infrastructure. It discovers macOS
+AudioPlane supplies local, source-aware audio infrastructure. It discovers macOS
 applications, captures them with Process Taps, normalizes PCM, preserves source
 identity, delivers bounded realtime streams, and accepts generated PCM for
 bounded HAL playback or an installed loopback input. It does not transcribe
@@ -10,29 +10,34 @@ audio, run a model, remember conversations, synthesize speech, or send data to
 a cloud service unless application code explicitly adds a provider adapter.
 
 ```text
-application -> Sonexis input -> SDK -> provider -> SDK -> Sonexis output -> device
+application -> AudioPlane input -> SDK -> provider -> SDK -> AudioPlane output -> device
 ```
 
 Provider code never enters the capture/output core or Runtime protocol.
 
 ## Quickstart
 
+For a fresh checkout, start with [getting started](getting-started.md). It
+covers signing, separate Runtime/SDK installation, a hidden credential prompt,
+capture verification and output. The commands below run from the checkout root
+in an activated Python 3.10+ environment for provider use.
+
 Build and start the signed Runtime as documented in
 [`sonexis-runtime.md`](sonexis-runtime.md), then install the Python SDK:
 
 ```sh
-cd ~/Sonexis
-/usr/bin/python3 -m venv --system-site-packages .venv
+cd /path/to/audioplane
+python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install --no-deps --no-build-isolation -e SDKs/python
+python -m pip install -e ./SDKs/python
 ```
 
 ```python
 import asyncio
-from sonexis import Sonexis
+from audioplane import AudioPlane
 
 async def main():
-    async with Sonexis() as sx:
+    async with AudioPlane() as sx:
         async with await sx.capture("Spotify") as stream:
             async for frame in stream:
                 print(frame.source.name, frame.sequence, len(frame.data))
@@ -42,7 +47,28 @@ asyncio.run(main())
 
 Selectors may be an `AudioSource`, Runtime source ID, bundle identifier, PID
 passed as an integer, or exact application name. Numeric strings remain string
-selectors. Sonexis never fuzzy-picks an ambiguous name.
+selectors. AudioPlane never fuzzy-picks an ambiguous name.
+
+## Choose when to analyze audio
+
+AudioPlane always supplies live PCM frames. **Realtime** consumers forward
+frames as they arrive; **capture-then-analysis** consumers retain a bounded
+clip and request a review afterward. This is application policy, not a Runtime
+mode or different engine. [Developer workflows](developer-workflows.md) explains
+both patterns, concurrent response consumption, source scope and privacy.
+
+To review a complete presentation rather than answer at each pause:
+
+```sh
+python -m pip install --upgrade './SDKs/python[gemini]'
+python Examples/capture-and-review.py --source "Google Chrome" --duration 205
+```
+
+Set `GEMINI_API_KEY` first. The example receives AudioPlane PCM, builds a WAV
+in memory, and uses Google's Interactions API for a text review. It saves no
+audio and uses `store=False`. It neither downloads the video nor reads website
+transcripts. `--capture-only` verifies audio without cloud access. Chrome is
+an application-wide source: pause other audible tabs.
 
 ## Source-aware frames
 
@@ -59,7 +85,7 @@ not guaranteed to be sample-accurately synchronized.
 ## Multiple labeled sources
 
 ```python
-async with Sonexis() as sx:
+async with AudioPlane() as sx:
     async with sx.session(max_queue_packets=128) as group:
         await group.add("conversation", "Discord")
         await group.add("media", "Spotify")
@@ -99,7 +125,7 @@ routed through the common Runtime output plane with `--response-output default`.
 ```sh
 python -m pip install -e 'SDKs/python[gemini]'
 export GEMINI_API_KEY='...'
-export GEMINI_LIVE_MODEL='gemini-3.1-flash-live-preview'  # optional override
+export GEMINI_LIVE_MODEL='gemini-3.8-live'  # explicit current model
 audioplane agent \
   --provider gemini --source 'Google Chrome' \
   --response-output default --debug
@@ -157,9 +183,11 @@ set `allow_response_interruptions=True`; the reference application exposes
 this as `--gemini-barge-in`. Debug output reports turn-end-to-response-start
 latency and explicit server interruption events.
 
-The reference application defaults to `gemini-3.1-flash-live-preview` for
-turn-by-turn response behavior. Override it with `--gemini-model MODEL` or
-`GEMINI_LIVE_MODEL`. A model with proactive audio may intentionally decline to
+The CLI retains `gemini-3.1-flash-live-preview` as its compatibility default,
+while the direct sink has a different default. Set `--gemini-model MODEL` or
+`GEMINI_LIVE_MODEL` explicitly; this guide uses `gemini-3.8-live`, matching the
+[current Google SDK guide](https://ai.google.dev/gemini-api/docs/live-api/get-started-sdk).
+Model availability is account-dependent. A model with proactive audio may intentionally decline to
 respond to passive commentary even when the adapter finalized the turn
 correctly.
 
@@ -177,7 +205,7 @@ response.
 The authenticated live path was validated on 2026-09-26 with Google Chrome:
 local activity start/end were detected, exactly one `audio_stream_end` was
 sent, Gemini understood and referenced the captured commentary, readable output
-transcription arrived, the Gemini turn completed, and Sonexis reported zero
+transcription arrived, the Gemini turn completed, and AudioPlane reported zero
 dropped frames.
 
 Gemini returned-audio events declare 24 kHz mono PCM16. The reference app sends
@@ -198,7 +226,7 @@ wrapper around the same implementation. It selects and switches sources, sends f
 Gemini, or an offline mock, prints provider events and stream/drop/latency
 statistics, watches source/runtime lifecycle events, optionally writes PCM/WAV,
 and shuts down cleanly. `--response-output default` plays Gemini or OpenAI
-speech through Sonexis; an installed loopback destination ID sends the same
+speech through AudioPlane; an installed loopback destination ID sends the same
 audio to an application's selected microphone. Its README contains exact
 commands. Provider receive and Runtime playback run in separate tasks with a
 bounded queue, so a stalled output destination cannot freeze later provider
@@ -243,7 +271,7 @@ async with sx.duplex(
 Applications choose when to interrupt. `await session.output.flush()` drops
 buffered speech and starts a fresh stream epoch while keeping capture active;
 `cancel()` tears output down immediately. Process-specific capture does not
-digitally recapture Runtime playback, but Sonexis does not provide acoustic
+digitally recapture Runtime playback, but AudioPlane does not provide acoustic
 echo cancellation. Prefer headphones and treat loopback/remote echo policy as
 an application concern.
 
@@ -257,7 +285,7 @@ framing with synthetic PCM.
 
 `measure_activity(frame)` computes normalized RMS/peak outside the realtime
 callback. Its `active` flag means non-silent signal, not speech. Applications
-may supply a real VAD through the `VoiceActivityDetector` protocol; Sonexis does
+may supply a real VAD through the `VoiceActivityDetector` protocol; AudioPlane does
 not ship an unvalidated speech detector.
 
 `AudioActivityDetector` adds provider-neutral start/end edges with separate

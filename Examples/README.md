@@ -1,11 +1,18 @@
-# Sonexis Runtime examples
+# AudioPlane examples
 
-All examples import only a public Sonexis SDK. Install the local Python or
+All examples import only a public AudioPlane SDK. Install the local Python or
 TypeScript package before running the matching example.
+
+New here? Follow [getting started](../docs/getting-started.md), then choose
+[realtime streaming or capture-then-analysis](../docs/developer-workflows.md).
+All Python commands below assume an activated environment with the local SDK
+installed; the native Runtime is a separate prerequisite for live audio.
 
 | Concept | Example |
 | --- | --- |
 | one source | `python Examples/capture-one-source.py "Google Chrome"` |
+| verify capture without a provider | `python Examples/capture-and-review.py --source "Google Chrome" --duration 5 --capture-only` |
+| complete-clip AI review | `python Examples/capture-and-review.py --source "Google Chrome" --duration 205` |
 | labeled independent sources | `python Examples/capture-multiple-sources.py conversation=Discord media=Spotify` |
 | Runtime-owned playback | `python Examples/playback.py /path/to/response.wav --destination default` |
 | input/output ownership | `python Examples/duplex.py Discord --destination default` |
@@ -29,7 +36,7 @@ public duplex contract.
 npm init -y
 npm install /absolute/path/to/sonexis-runtime-1.0.0.tgz
 npm install --save-dev typescript @types/node
-cp /absolute/path/to/Sonexis/Examples/typescript-duplex.mts .
+cp /absolute/path/to/audioplane/Examples/typescript-duplex.mts .
 npx tsc --module NodeNext --moduleResolution NodeNext --target ES2022 typescript-duplex.mts
 node typescript-duplex.mjs "Google Chrome"
 ```
@@ -38,3 +45,8 @@ Examples requiring live capture need macOS Screen & System Audio Recording
 permission for the signed Runtime. Provider examples additionally need their
 optional SDK dependency and an environment-provided API key. `--help`, import,
 and mock-provider tests do not use credentials.
+
+The review example needs Python 3.10+, an up-to-date `google-genai` dependency
+and `GEMINI_API_KEY`. It sends only captured audio to Google, not video frames
+or a fetched transcript. PCM is bounded to 300 seconds and kept in memory;
+review text is printed. See `--help` for duration, model and prompt overrides.

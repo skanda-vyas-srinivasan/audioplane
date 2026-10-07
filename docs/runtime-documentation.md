@@ -1,10 +1,12 @@
-# Sonexis Runtime Documentation
+# AudioPlane documentation
 
-Sonexis Runtime is programmable application-level audio I/O for macOS. Start
+AudioPlane is programmable application-level audio I/O for macOS. Start
 here instead of reading Runtime implementation files.
 
 ## Getting started
 
+- [Canonical installation, first-audio check and provider quickstart](getting-started.md)
+- [Realtime streaming vs. capture-then-analysis](developer-workflows.md)
 - [Runtime guide and zero-to-audio quickstart](sonexis-runtime.md)
 - [Focused public examples](../Examples/README.md)
 - [Python SDK](../SDKs/python/README.md)
@@ -39,7 +41,11 @@ here instead of reading Runtime implementation files.
 
 ## Release records
 
-Plans and reports record what was actually built and tested; they are not API
-specifications. Use `RUNTIME_V1_0_REPORT.md` for current automated evidence,
+Plans and reports are historical checkpoint evidence, not current API
+specifications or certification of every current device/provider combination.
+Some predate standalone AudioPlane naming and layout. Use the current guides
+above for commands, [workflow qualification](developer-workflows-validation.md)
+for this onboarding pass, and the [1.0 manual matrix](runtime-v1.0-manual-validation.md)
+for outstanding hardware/provider checks. See `RUNTIME_V1_0_REPORT.md` for historical RC evidence,
 the [post-1.0 roadmap](runtime-post-1.0-roadmap.md) for deferred work, and
 `CHANGELOG.md` for the concise evolution history.

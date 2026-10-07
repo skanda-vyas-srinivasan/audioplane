@@ -9,10 +9,14 @@ implementation.
 
 From the repository root, install the SDK in a virtual environment:
 
+Use [getting started](../../docs/getting-started.md) for native Runtime setup
+and permission checks. For reviewing a full clip after playback instead of
+live conversation, use [capture-and-review](../capture-and-review.py).
+
 ```sh
-/usr/bin/python3 -m venv --system-site-packages .venv
+python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install --no-deps --no-build-isolation -e SDKs/python
+python -m pip install -e ./SDKs/python
 ```
 
 Start `sonexis-runtime`, then run the credential-free path:
@@ -39,20 +43,23 @@ audioplane agent --provider openai --source Spotify
 python -m pip install -e 'SDKs/python[gemini]'
 export GEMINI_API_KEY='...'
 audioplane agent \
-  --provider gemini --source 'Google Chrome' \
+  --provider gemini --gemini-model gemini-3.8-live --source 'Google Chrome' \
   --response-output default --debug
 ```
 
 Gemini mode keeps Gemini's automatic VAD enabled and adds local end detection.
-After at least 250 ms of meaningful activity, 1,200 ms below the end threshold
-sends one `audio_stream_end`; additional silence is suppressed until meaningful
-activity begins again. `--debug` reports local activity edges, stream-end sends,
+The packaged agent defaults to WebRTC speech detection: 100 ms of confirmed
+speech, 100 ms onset-gap tolerance and 1,200 ms of non-speech sends one
+`audio_stream_end`; further silence does not repeatedly finalize. The direct
+sink retains energy detection unless a classifier is supplied.
+`--debug` reports local activity edges, stream-end sends,
 Gemini response starts/turn completion, and raw returned-audio byte counts.
 Readable output transcription is printed normally. Tune application audio with:
 
 ```sh
 audioplane agent \
-  --provider gemini --source 'Google Chrome' --debug \
+  --provider gemini --gemini-model gemini-3.8-live --source 'Google Chrome' --debug \
+  --gemini-vad energy \
   --gemini-start-threshold 0.015 \
   --gemini-end-threshold 0.008 \
   --gemini-min-activity-ms 250 \
@@ -64,7 +71,8 @@ background audio opens turns; lower them when quiet speech is missed. Keep the
 end threshold below the start threshold. A custom `VoiceActivityDetector` can
 be supplied to `GeminiLiveSink` when energy thresholds are insufficient.
 
-The reference app defaults to `gemini-3.1-flash-live-preview` for responsive live audio. Gemini server VAD owns response boundaries; local
+The CLI retains `gemini-3.1-flash-live-preview` as a compatibility default;
+these commands explicitly select `gemini-3.8-live`. Gemini server VAD owns response boundaries; local
 finalization does not guarantee one response per segment. Select another model explicitly
 with `--gemini-model MODEL` or `GEMINI_LIVE_MODEL`. Models with proactive audio
 may intentionally stay silent for passive commentary even after a valid turn.
@@ -80,7 +88,7 @@ discards queued model speech and flushes Runtime's render buffer, so stale bot
 audio does not continue playing after the barge-in. Stream diagnostics report
 input shedding separately as `provider_dropped` and `provider_queue_hwm`.
 
-`--response-output DESTINATION` routes returned provider PCM through Sonexis
+`--response-output DESTINATION` routes returned provider PCM through AudioPlane
 Runtime's bounded output plane. `--play-response` is shorthand for destination
 `default`. This works for both Gemini and OpenAI and never imports a Python
 playback library. Provider receive and output playback run independently: a
@@ -92,7 +100,7 @@ This prevents bursty model delivery from overflowing Runtime's render queue.
 Use `sonexisctl outputs` to select a fixed speaker/headphone or an installed
 loopback device. Raw returned-audio byte diagnostics stay behind `--debug`.
 
-Provider modes select their required Sonexis format preset automatically. No
+Provider modes select their required AudioPlane format preset automatically. No
 credential or raw captured PCM is logged or stored unless `--output` is
 explicitly supplied. Provider text/transcription and source/session identifiers
 are printed to the terminal and may contain sensitive context. Recordings are
@@ -130,6 +138,7 @@ writes the same metadata to a private (`0600`) regular file:
 ```sh
 audioplane agent \
   --provider gemini \
+  --gemini-model gemini-3.8-live \
   --source "Google Chrome" \
   --response-output coreaudio:com.audioplane.input.device \
   --gemini-barge-in \
