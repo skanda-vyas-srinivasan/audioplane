@@ -11,6 +11,7 @@ fi
 
 for example in \
     capture-one-source.py \
+    capture-and-review.py \
     capture-multiple-sources.py \
     playback.py \
     duplex.py \
