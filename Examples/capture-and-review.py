@@ -31,6 +31,10 @@ DEFAULT_PROMPT = (
 )
 
 
+class ReviewError(ValueError):
+    """An actionable local error, unlike an untrusted provider exception."""
+
+
 @dataclass
 class Clip:
     pcm: bytes
@@ -93,7 +97,7 @@ async def review_clip(client, clip, model, prompt, timeout):
     """Google's Interactions API accepts inline WAV; no upload/file storage."""
     create = getattr(getattr(client.aio, "interactions", None), "create", None)
     if not callable(create):
-        raise ValueError("Upgrade google-genai: this example requires the "
+        raise ReviewError("Upgrade google-genai: this example requires the "
                          "Interactions API (python -m pip install --upgrade google-genai)")
     response = await asyncio.wait_for(create(
         model=model,
@@ -104,7 +108,7 @@ async def review_clip(client, clip, model, prompt, timeout):
                 "data": base64.b64encode(clip.wav()).decode("ascii")}],
     ), timeout=timeout)
     if not response.output_text:
-        raise ValueError("Gemini returned no readable review; check model access "
+        raise ReviewError("Gemini returned no readable review; check model access "
                          "and try a different --model")
     return response.output_text
 
@@ -146,8 +150,10 @@ async def run(args):
                   "No local audio file is saved.", file=sys.stderr, flush=True)
             try:
                 result = await review_clip(provider, clip, args.model, args.prompt, args.timeout)
-            except (asyncio.TimeoutError, ValueError) as error:
-                raise ValueError(str(error) or "Gemini review timed out; retry later") from None
+            except asyncio.TimeoutError:
+                raise ValueError("Gemini review timed out; retry later") from None
+            except ReviewError as error:
+                raise ValueError(str(error)) from None
             except Exception as error:
                 # Raw provider exceptions can contain request data/credentials.
                 code = getattr(error, "status_code", None) or getattr(error, "code", None)

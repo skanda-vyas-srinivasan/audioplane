@@ -142,7 +142,7 @@ class CaptureReviewTests(unittest.IsolatedAsyncioTestCase):
         capture.__aenter__.return_value.source = SimpleNamespace(name="Fixture")
         audio.__aenter__.return_value.capture.return_value = capture
         args = example.parser().parse_args(["--duration", "1"])
-        private_error = RuntimeError("secret-key-and-private-audio")
+        private_error = ValueError("secret-key-and-private-audio")
         with patch.object(example, "provider_client", return_value=provider), \
                 patch.object(example, "AudioPlane", return_value=audio), \
                 patch.object(example, "collect_clip", return_value=example.Clip(frame().data, 1)), \
