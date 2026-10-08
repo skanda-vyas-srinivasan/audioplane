@@ -13,7 +13,8 @@ Gemini, OpenAI and MCP integrations need Python 3.10+.
 
 ## Install in your Python application
 
-The prepared PyPI release uses an explicit prerelease version:
+The [published PyPI release](https://pypi.org/project/audioplane/1.0.0rc1/)
+uses an explicit prerelease version:
 
 ```sh
 python3 -m venv .venv
@@ -21,9 +22,8 @@ python3 -m venv .venv
 python -m pip install audioplane==1.0.0rc1
 ```
 
-Until that release is available on PyPI, install from a repository checkout:
-`python -m pip install ./SDKs/python`.
-For provider support after publication, use
+For a checkout-local install, use `python -m pip install ./SDKs/python`.
+For provider support, use
 `python -m pip install 'audioplane[gemini]==1.0.0rc1'` or
 `python -m pip install 'audioplane[openai]==1.0.0rc1'`.
 Provider credentials are external; no cloud provider is required for basic I/O.
@@ -42,7 +42,7 @@ hardware behavior are not guarantees of unattended production qualification.
 
 ## Install the command-line client with pipx
 
-Once the prepared prerelease is available, install the CLI separately:
+Install the CLI separately:
 
 ```sh
 pipx install 'audioplane==1.0.0rc1'
@@ -52,7 +52,7 @@ audioplane doctor
 audioplane sources
 ```
 
-Before publication, the source install is:
+An equivalent source install pinned to the release tag is:
 
 ```sh
 pipx install \

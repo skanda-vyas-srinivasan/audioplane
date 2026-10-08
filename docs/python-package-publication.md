@@ -5,6 +5,32 @@ preview of the Python SDK and CLI. Preparation, a Git source tag, and successful
 local tests do not mean that a package has been uploaded to PyPI. Publication is
 confirmed only by the PyPI release page and a fresh install from that index.
 
+## First publication verified — 2026-10-07
+
+[`audioplane 1.0.0rc1`](https://pypi.org/project/audioplane/1.0.0rc1/) is
+published. Both public files match the validated local artifacts:
+
+| File | SHA-256 |
+| --- | --- |
+| `audioplane-1.0.0rc1-py3-none-any.whl` | `bf75acff2e6d36a74d4db18e1bcb06bb85b5c0c39acd35978a91edbb18b29629` |
+| `audioplane-1.0.0rc1.tar.gz` | `ab606366f7077482b9fa0e6d94335eac64274758b2250641310b43b63c4fe9aa` |
+
+Source checkpoint: `826dc5f04cf4d07622349ab59ed8b80307932515`, tagged
+`python-v1.0.0rc1`. The published archives are immutable; later documentation
+updates do not modify that source tag or re-upload its artifacts.
+
+Validation before upload: full Runtime release gate including GUI discovery,
+200 optional Python tests with no skips, 39 Node tests, strict Twine checks,
+archive-content checks, and fresh wheel/source installs. After upload: a new
+isolated environment installed the wheel directly from `https://pypi.org/simple`
+without cache or `PYTHONPATH`; package/import version, CLI version/help,
+installed-package examples and `doctor` against Runtime 1.0.0/protocol v2 passed.
+
+This is SDK publication, not a notarized Runtime or virtual-driver release.
+No new authenticated provider or hardware listening test was run for this
+upload. The upload token was entered by the human in their own terminal, not
+included in chat or committed source.
+
 ## What is uploaded
 
 - A pure-Python wheel and source archive built from `SDKs/python`.

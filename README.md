@@ -64,7 +64,7 @@ audio before adding a provider. For application design, see
 Clone the repository:
 
 ```bash
-git clone https://github.com/skanda-vyas-srinivasan/audioplane.git
+git clone --branch python-v1.0.0rc1 https://github.com/skanda-vyas-srinivasan/audioplane.git
 cd audioplane
 ```
 
@@ -85,7 +85,7 @@ permission for that same signed Runtime.
 Install the developer CLI with `pipx`:
 
 ```bash
-pipx install ./SDKs/python
+pipx install 'audioplane==1.0.0rc1'
 
 audioplane version
 audioplane doctor
@@ -105,7 +105,7 @@ Install the SDK in a virtual environment:
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install ./SDKs/python
+python -m pip install audioplane==1.0.0rc1
 ```
 
 Then capture an application by exact name, source ID, bundle identifier, PID,
@@ -429,7 +429,7 @@ See the full [security model](docs/sonexis-runtime.md#security-and-trust-model).
 
 - macOS only; no Windows or Linux backend
 - Development-signed source build rather than a notarized installer
-- Python and TypeScript packages are not published to public registries yet
+- Python SDK/CLI published as [1.0.0rc1 on PyPI](https://pypi.org/project/audioplane/1.0.0rc1/); Node package is not published to npm yet
 - The Runtime/CLI Swift executable names still use compatibility-era naming
 - No built-in acoustic echo cancellation
 - `AudioPlane Input` requires explicit system-wide installation and a reboot;

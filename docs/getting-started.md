@@ -36,20 +36,21 @@ Run from the checkout root. Check that `python3` is 3.10+ if using Gemini/OpenAI
 python3 --version
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install ./SDKs/python
+python -m pip install audioplane==1.0.0rc1
 audioplane version
 audioplane doctor
 audioplane sources
 ```
 
-Use `python -m pip install -e ./SDKs/python` instead for SDK development.
-These commands install from this checkout, so examples match the installed
-version. AudioPlane is not yet published to PyPI; `pip install audioplane`
-is not the current installation path. Avoid confusing an older pipx CLI with
+The [1.0.0rc1 SDK](https://pypi.org/project/audioplane/1.0.0rc1/) is published
+on PyPI. The clone above selects its matching source and examples. Use the
+explicit version to select this prerelease. For checkout-local SDK development,
+use `python -m pip install -e ./SDKs/python` instead.
+Avoid confusing an older pipx CLI with
 the executable in your activated environment (`command -v audioplane`).
 
 If you want just the CLI in a separate pipx environment, use
-`pipx install ./SDKs/python`. This does not install the SDK into your project's
+`pipx install 'audioplane==1.0.0rc1'`. This does not install the SDK into your project's
 Python interpreter; use the virtual environment above for Python application code.
 
 ## 3. Verify capture without an AI provider
@@ -98,7 +99,7 @@ the same capture object. See [developer workflows](developer-workflows.md).
 Install optional Gemini dependencies with a 3.10+ interpreter:
 
 ```sh
-python -m pip install --upgrade './SDKs/python[gemini]'
+python -m pip install 'audioplane[gemini]==1.0.0rc1'
 ```
 
 In macOS's default **zsh** terminal, enter your key at a hidden prompt:
