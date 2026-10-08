@@ -16,7 +16,7 @@ Python 3.9+ supports core capture; use Python 3.10+ for provider integrations.
 Node is needed only for the Node.js SDK, not these Python examples.
 
 ```sh
-git clone https://github.com/skanda-vyas-srinivasan/audioplane.git
+git clone --branch python-v1.0.0rc1 https://github.com/skanda-vyas-srinivasan/audioplane.git
 cd audioplane
 ./Scripts/setup-runtime-dev.sh
 ./Scripts/runtime-dev.sh start

@@ -4,12 +4,13 @@ from setuptools import find_packages, setup
 
 setup(
     name="audioplane",
-    version="1.0.0",
+    version="1.0.0rc1",
     description="Source-aware bidirectional audio I/O SDK for macOS",
     author="AudioPlane contributors",
     author_email="133609115+skanda-vyas-srinivasan@users.noreply.github.com",
     url="https://github.com/skanda-vyas-srinivasan/audioplane",
     project_urls={
+        "Documentation": "https://github.com/skanda-vyas-srinivasan/audioplane/blob/python-v1.0.0rc1/docs/getting-started.md",
         "Repository": "https://github.com/skanda-vyas-srinivasan/audioplane",
         "Issues": "https://github.com/skanda-vyas-srinivasan/audioplane/issues",
     },
@@ -21,7 +22,7 @@ setup(
     python_requires=">=3.9",
     keywords=["audio", "coreaudio", "macos", "realtime", "sdk"],
     classifiers=[
-        "Development Status :: 5 - Production/Stable",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.9",

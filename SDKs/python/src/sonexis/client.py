@@ -50,7 +50,7 @@ class Sonexis:
     """A reusable asynchronous connection to the local Sonexis Runtime."""
 
     def __init__(self, socket_path: Optional[str] = None, *, client_name: str = "sonexis-python",
-                 client_version: str = "1.0.0", request_timeout: float = 10.0) -> None:
+                 client_version: str = "1.0.0rc1", request_timeout: float = 10.0) -> None:
         if not math.isfinite(request_timeout) or request_timeout <= 0:
             raise ValueError("request_timeout must be finite and positive")
         self.request_timeout = request_timeout

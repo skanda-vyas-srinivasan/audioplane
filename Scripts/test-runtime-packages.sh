@@ -9,7 +9,7 @@ trap 'rm -rf "$TEST_DIR"' EXIT HUP INT TERM
 cmp "$ROOT_DIR/LICENSE" "$ROOT_DIR/SDKs/python/LICENSE"
 cmp "$ROOT_DIR/LICENSE" "$ROOT_DIR/SDKs/typescript/LICENSE"
 "$ROOT_DIR/Scripts/check-runtime-version.py"
-VERSION=$(sed -n '1p' "$ROOT_DIR/RUNTIME_VERSION")
+VERSION=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' "$ROOT_DIR/SDKs/python/pyproject.toml")
 
 copy_tracked_tree() {
     SOURCE_PREFIX=$1

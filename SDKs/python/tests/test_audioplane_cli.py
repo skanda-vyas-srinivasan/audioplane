@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
-from audioplane import AudioPlane, AudioPlaneClient, Sonexis
+from audioplane import AudioPlane, AudioPlaneClient, Sonexis, __version__
 from audioplane.cli import SpeechSynthesisError, _parser, _run
 from sonexis import (AudioFormat, AudioOutputDestination, AudioSource, Handshake,
                      RuntimeStatus, SampleFormat)
@@ -191,7 +191,7 @@ class AudioPlaneCLITests(unittest.IsolatedAsyncioTestCase):
         with redirect_stdout(output):
             result = await _run(arguments("doctor"), FakeClient)
         self.assertEqual(result, 0)
-        self.assertIn("AudioPlane SDK 1.0.0: ok", output.getvalue())
+        self.assertIn(f"AudioPlane SDK {__version__}: ok", output.getvalue())
         self.assertIn("Protocol v2: compatible", output.getvalue())
 
     async def test_sources_json_is_typed_public_data(self):
@@ -224,7 +224,7 @@ class AudioPlaneCLITests(unittest.IsolatedAsyncioTestCase):
         with redirect_stdout(output):
             result = await _run(arguments("version"), MustNotConstruct)
         self.assertEqual(result, 0)
-        self.assertEqual(output.getvalue().strip(), "AudioPlane 1.0.0")
+        self.assertEqual(output.getvalue().strip(), f"AudioPlane {__version__}")
 
     async def test_speak_reuses_one_output_until_quit(self):
         lines = iter(["hello everyone", "", "another line", "/quit"])

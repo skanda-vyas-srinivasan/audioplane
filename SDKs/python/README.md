@@ -5,18 +5,58 @@ only to the local Unix-domain Runtime and keeps Core Audio details out of
 application code. The core package has no runtime dependencies and supports
 Python 3.9+.
 
-## Install the command-line client with pipx
+**Developer preview (`1.0.0rc1`). Native macOS Runtime required.** The Python
+package does not install the Runtime or virtual audio driver. Start with the
+[installation and first-audio guide](https://github.com/skanda-vyas-srinivasan/audioplane/blob/python-v1.0.0rc1/docs/getting-started.md)
+before attempting capture or playback. Core audio I/O needs Python 3.9+;
+Gemini, OpenAI and MCP integrations need Python 3.10+.
 
-AudioPlane has not been published to PyPI. Install the current public repository
-directly with `pipx`:
+## Install in your Python application
+
+The prepared PyPI release uses an explicit prerelease version:
 
 ```sh
-pipx install \
-  "git+https://github.com/skanda-vyas-srinivasan/audioplane.git#subdirectory=SDKs/python"
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install audioplane==1.0.0rc1
+```
+
+Until that release is available on PyPI, install from a repository checkout:
+`python -m pip install ./SDKs/python`.
+For provider support after publication, use
+`python -m pip install 'audioplane[gemini]==1.0.0rc1'` or
+`python -m pip install 'audioplane[openai]==1.0.0rc1'`.
+Provider credentials are external; no cloud provider is required for basic I/O.
+
+Documentation:
+
+- [Getting started and permissions](https://github.com/skanda-vyas-srinivasan/audioplane/blob/python-v1.0.0rc1/docs/getting-started.md)
+- [Realtime streaming vs. capture-and-review](https://github.com/skanda-vyas-srinivasan/audioplane/blob/python-v1.0.0rc1/docs/developer-workflows.md)
+- [AI integration](https://github.com/skanda-vyas-srinivasan/audioplane/blob/python-v1.0.0rc1/docs/ai-integration.md)
+- [Playback, loopback and duplex output](https://github.com/skanda-vyas-srinivasan/audioplane/blob/python-v1.0.0rc1/docs/output-audio.md)
+- [Current qualification and outstanding manual checks](https://github.com/skanda-vyas-srinivasan/audioplane/blob/python-v1.0.0rc1/docs/developer-workflows-validation.md)
+
+These links reference a fixed documentation revision so they also work on PyPI
+and outside a repository checkout. Installation, cloud model availability and
+hardware behavior are not guarantees of unattended production qualification.
+
+## Install the command-line client with pipx
+
+Once the prepared prerelease is available, install the CLI separately:
+
+```sh
+pipx install 'audioplane==1.0.0rc1'
 
 audioplane version
 audioplane doctor
 audioplane sources
+```
+
+Before publication, the source install is:
+
+```sh
+pipx install \
+  "git+https://github.com/skanda-vyas-srinivasan/audioplane.git@python-v1.0.0rc1#subdirectory=SDKs/python"
 ```
 
 This installs the `audioplane` client and `audioplane-mcp` control server in an
@@ -79,7 +119,7 @@ python -c 'import audioplane; print(audioplane.__version__)'
 The editable install is the normal repository-development path. Release
 engineering also builds a wheel and source distribution locally; install the
 wheel into a clean environment with `python -m pip install PATH_TO_WHEEL`.
-AudioPlane packages are not currently published to PyPI.
+The package contains the SDK and CLI, not a separately installed native Runtime.
 
 For completely offline testing, installation is unnecessary:
 
@@ -90,8 +130,8 @@ PYTHONPATH="$PWD/SDKs/python/src" /usr/bin/python3 -m unittest discover \
 
 ## Capture one application
 
-Start with [getting started](../../docs/getting-started.md) for permissions and
-separate Runtime installation. Choose [realtime or capture-then-analysis](../../docs/developer-workflows.md)
+Start with [getting started](https://github.com/skanda-vyas-srinivasan/audioplane/blob/python-v1.0.0rc1/docs/getting-started.md) for permissions and
+separate Runtime installation. Choose [realtime or capture-then-analysis](https://github.com/skanda-vyas-srinivasan/audioplane/blob/python-v1.0.0rc1/docs/developer-workflows.md)
 based on your application; neither requires implementing Core Audio.
 
 ```python
@@ -326,7 +366,7 @@ async with AudioPlane() as sx:
 
 This fragment shows the send path only. Consume `model.events()` concurrently
 to receive text/audio and surface provider failures; the [runnable streaming
-example](../../docs/developer-workflows.md#realtime-process-while-the-source-plays)
+example](https://github.com/skanda-vyas-srinivasan/audioplane/blob/python-v1.0.0rc1/docs/developer-workflows.md#realtime-process-while-the-source-plays)
 and packaged `audioplane agent` do that. A provider stall can backpressure direct
 forwarding; use the packaged bounded pipeline for conversational behavior.
 
