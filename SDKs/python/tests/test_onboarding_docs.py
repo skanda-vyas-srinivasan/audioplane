@@ -10,7 +10,7 @@ ROOT = Path(__file__).parents[3]
 DOCS = (
     "README.md", "docs/getting-started.md", "docs/developer-workflows.md",
     "docs/developer-workflows-validation.md", "docs/ai-integration.md",
-    "docs/runtime-documentation.md", "SDKs/python/README.md", "Examples/README.md",
+    "docs/runtime-documentation.md", "docs/development.md", "SDKs/python/README.md", "Examples/README.md",
     "Examples/audio-agent/README.md",
 )
 

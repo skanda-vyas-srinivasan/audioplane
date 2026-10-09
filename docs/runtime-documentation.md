@@ -33,6 +33,7 @@ here instead of reading Runtime implementation files.
 
 ## Operations
 
+- [Repository development, tests, and release qualification](development.md)
 - Diagnostics, trust model, and troubleshooting: [Runtime guide](sonexis-runtime.md)
 - Current human/device/provider checks: [1.0 manual validation](runtime-v1.0-manual-validation.md)
 - v0.6 routing validation: [manual guide](runtime-v0.6-manual-validation.md)

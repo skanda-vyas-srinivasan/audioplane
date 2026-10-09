@@ -1,454 +1,141 @@
 # AudioPlane
 
-**Programmable application-level audio I/O for macOS.**
+**Capture audio from individual Mac apps. Send audio back through the same SDK.**
 
-AudioPlane lets local software capture labeled audio from individual desktop
-applications and send realtime PCM back to speakers, headphones, or installed
-loopback devices. It hides Core Audio Process Taps, device callbacks, format
-conversion, socket framing, jitter buffering, and teardown behind typed Python
-and TypeScript APIs.
+AudioPlane gives Python and Node.js applications access to desktop audio without
+implementing Core Audio themselves. Listen to Chrome, Discord, Spotify, or a
+microphone; process the audio in your code; play generated audio through speakers,
+headphones, or an optional virtual microphone.
 
-```text
-Chrome / Discord / Spotify          Generated audio
-             |                            |
-             v                            v
-      source-aware capture         bounded playback
-             |                            |
-             +------ AudioPlane ----------+
-                         |
-                         v
-                Python / Node.js SDKs
-```
+Use it to build live captions, translation, audio analysis, or voice agents.
+AudioPlane supplies the audio I/O. Your code or model supplies the intelligence.
 
-AudioPlane is local infrastructure, not an AI assistant or transcription
-service. Provider adapters for Gemini Live and OpenAI Realtime live above the
-Runtime and use the same public audio APIs as any other client.
-The optional MCP interface is control-only; realtime PCM never flows through MCP.
+**Developer preview:** the Python SDK is available as
+[`audioplane 1.0.0rc1`](https://pypi.org/project/audioplane/1.0.0rc1/).
+The native macOS Runtime currently requires a separate source build.
 
-## What works
+## What you install
 
-- Per-application capture through macOS Core Audio Process Taps
-- Physical-microphone discovery and capture through the same source API
-- Stable source identity with application name, bundle identifier, and PID
-- PCM16 mono at 16/24/48 kHz and stereo at 48 kHz; Float32 mono/stereo at 48 kHz
-- Timestamped, sequenced binary PCM frames with discontinuity/drop metadata
-- Multiple simultaneous sources, sessions, and clients
-- Default-device, physical-device, and installed loopback playback
-- Buildable first-party `AudioPlane Input` virtual microphone (manual install)
-- Bounded capture, playback, jitter, and backpressure queues
-- Source, capture, output, device, and Runtime lifecycle events
-- Python async SDK, typed TypeScript SDK, CLI, and control-only MCP server
-- Gemini Live and OpenAI Realtime adapters with provider-neutral audio APIs
-- Diagnostics, deterministic replay, fuzzing, stress tests, and TSan coverage
+There are two required pieces:
 
-## Requirements
+- **Runtime:** a local process that performs capture and playback and owns macOS
+  audio permissions. It runs on the same Mac as the applications being captured.
+- **SDK:** the Python or Node.js client your application uses to talk to that
+  Runtime. The Python package also includes the `audioplane` CLI.
 
-- macOS 14.4 or newer
-- Xcode command-line tools and Swift 5.9 or newer
-- An Apple Development signing identity for live Process Tap permission
-- Python 3.9 or newer for the Python SDK and `audioplane` CLI
-- Node.js 18 or newer only when using the TypeScript SDK
+**`pip install` installs the SDK, not the Runtime.** Speakers/headphones and app
+capture need no virtual driver. A virtual device is optional and only needed
+when routing audio into another application's microphone input.
 
-The repository builds without the Sonexis consumer application or any sibling
-checkout. Some internal Swift executable and module names retain the earlier
-`Sonexis` prefix for v1.0 compatibility; they are ordinary source code owned by
-this standalone repository, not links to another product.
+## Get your first audio stream
 
-## Quickstart
+### 1. Build and start the Runtime
 
-Start with the [step-by-step getting started guide](docs/getting-started.md).
-It separates native Runtime setup from SDK installation and verifies first
-audio before adding a provider. For application design, see
-[realtime vs. capture-then-analysis](docs/developer-workflows.md).
+You need **macOS 14.4+, Xcode command-line tools, and an Apple Development signing
+identity** configured in Xcode Settings > Accounts. The identity is used to sign
+the native executable for macOS audio permissions.
 
-Clone the repository:
-
-```bash
+```sh
 git clone --branch python-v1.0.0rc1 https://github.com/skanda-vyas-srinivasan/audioplane.git
 cd audioplane
-```
-
-Configure your Apple Development identity in Xcode, then build and install the
-signed development Runtime:
-
-```bash
 ./Scripts/setup-runtime-dev.sh
 ./Scripts/runtime-dev.sh start
 ```
 
-The installer is user-local and does not use `sudo` or create a persistent
-LaunchAgent. On first live capture, macOS should request application-audio
-permission for the stable Runtime identity `com.sonexis.runtime`.
-The first physical-microphone capture separately asks for macOS Microphone
-permission for that same signed Runtime.
+This installs development tools under your user account. It does not use sudo,
+install a persistent background agent, or change your selected audio devices.
+See [Getting started](docs/getting-started.md) for signing and permissions help.
 
-Install the developer CLI with `pipx`:
+### 2. Install the Python SDK
 
-```bash
-pipx install 'audioplane==1.0.0rc1'
+Use Python **3.9+** for basic audio I/O, or **3.10+** for AI integrations.
 
-audioplane version
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install audioplane==1.0.0rc1
 audioplane doctor
 audioplane sources
-audioplane outputs
-audioplane status
 ```
 
-`pipx` installs the Python client tools, not the signed native Runtime. The
-Runtime must be built and started separately because macOS grants Process Tap
-permission to that signed executable.
+`doctor` checks the Runtime connection. The first capture may ask you to approve
+macOS Screen & System Audio Recording permission; microphone capture needs
+Microphone permission separately.
 
-## Capture an application
+### 3. Capture an application
 
-Install the SDK in a virtual environment:
-
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install audioplane==1.0.0rc1
-```
-
-Then capture an application by exact name, source ID, bundle identifier, PID,
-or typed source object:
+Play some audio in Chrome. Save this as `capture.py`, then run `python capture.py`:
 
 ```python
 import asyncio
-
 from audioplane import AudioPlane
 
-
-async def main() -> None:
+async def main():
     async with AudioPlane() as audio:
         async with await audio.capture("Google Chrome") as stream:
             async for frame in stream:
-                print(
-                    frame.source.name,
-                    frame.timestamp_ns,
-                    frame.format.sample_rate,
-                    len(frame.data),
-                )
-
+                print(frame.source.name, frame.timestamp_ns, len(frame.data))
+                # Your code can consume frame.data here.
 
 asyncio.run(main())
 ```
 
-Human-readable names are accepted only when they resolve uniquely. AudioPlane
-returns a structured ambiguity error instead of silently choosing a process.
-
-Capture is application-wide, not browser-tab-specific. Pause other audible
-Chrome tabs before analyzing a single video. AudioPlane supplies PCM, not
-website transcripts or video frames.
-
-For raw PCM validation, use the installed native diagnostic CLI:
-
-```bash
-export PATH="$HOME/Library/Application Support/SonexisRuntime/dev/bin:$PATH"
-
-sonexisctl sources
-sonexisctl capture SOURCE_ID --output /tmp/capture.pcm --debug
-```
-
-Press `Ctrl-C` to stop the foreground capture cleanly.
-
-## Play audio
-
-AudioPlane also accepts realtime client-to-Runtime PCM:
-
-```python
-from audioplane import AudioFormat, AudioPlane
-
-
-async def play(chunks) -> None:
-    async with AudioPlane() as audio:
-        async with await audio.playback(
-            destination="default",
-            format=AudioFormat.openai_realtime_output(),
-            target_buffer_milliseconds=60,
-        ) as output:
-            async for chunk in chunks:
-                await output.write(chunk)
-```
-
-`write()` applies socket backpressure and splits large writes into bounded
-protocol packets. `flush()` supports interruption/barge-in while retaining the
-session; `cancel()` immediately discards buffered output.
-
-To play a deterministic WAV file through the native CLI:
-
-```bash
-sonexisctl outputs
-sonexisctl play /path/to/audio.wav --destination default --debug
-```
-
-To make generated audio appear as a microphone input to Discord, Zoom, or
-another application, build AudioPlane's first-party virtual device:
-
-```bash
-./Scripts/build-audioplane-input-dev.sh
-./Scripts/install-audioplane-input.sh
-```
-
-Installation is an explicit system change: the script visibly invokes `sudo`
-to copy the exact signed bundle into `/Library/Audio/Plug-Ins/HAL`, but never
-changes the default input/output device or restarts Core Audio. Restart the Mac,
-select **AudioPlane Input** inside the receiving application, then locate its
-exact destination ID:
-
-```bash
-audioplane outputs
-sonexisctl play /path/to/audio.wav \
-  --destination coreaudio:com.audioplane.input.device --debug
-```
-
-For a quick interactive text-to-microphone test, keep the Runtime running and
-use the Python CLI. It opens one output session and speaks every submitted line
-until `/quit`, `/exit`, `Ctrl-D`, or `Ctrl-C`:
-
-```text
-$ audioplane speak
-AudioPlane Input ready. Type text and press Enter; /quit exits.
-> hello everyone
-> this is another line
-> /quit
-```
-
-macOS `say` performs local speech synthesis; no text or audio is sent to a
-cloud service. Use `--voice NAME`, `--rate WORDS_PER_MINUTE`, or
-`--destination ID_OR_NAME` to override the defaults.
-
-To keep your physical microphone available while AudioPlane Input is selected
-inside Discord, Zoom, or another app, run a bounded passthrough in one terminal:
-
-```bash
-audioplane mic-through
-```
-
-The command resolves the current macOS default microphone, captures it through
-the signed Runtime, and routes it to AudioPlane Input until `Ctrl-C`. In a
-second terminal, `audioplane speak` or an AI response output can inject audio
-at the same time; Core Audio mixes active output clients before the virtual
-input is read. Use `--source ID_OR_NAME` to select a different physical input.
-AudioPlane rejects choosing AudioPlane Input itself as the passthrough source,
-which would create a direct digital feedback loop. It never changes the macOS
-default or another application's selected microphone.
-
-BlackHole remains supported as a fallback. The first-party driver is currently
-a source-built developer preview and still requires the documented manual
-end-to-end validation before a packaged release.
-
-## Multiple labeled sources
-
-Independent streams retain their identity and are never mixed automatically:
-
-```python
-async with AudioPlane() as audio:
-    async with audio.session() as session:
-        await session.add("conversation", "Discord")
-        await session.add("media", "Spotify")
-
-        async for item in session.frames():
-            print(item.label, item.source.name, item.timestamp_ns)
-```
-
-AudioPlane preserves timestamps for each stream but does not claim
-sample-accurate synchronization between independent application processes.
-
-## Components
-
-| Component | Purpose |
-|---|---|
-| `sonexis-runtime` | Signed native Runtime owning capture, playback, sessions, and local IPC |
-| `sonexisctl` | Native diagnostics, capture, playback, event watching, and raw file validation |
-| `audioplane` | `pipx`-installable developer CLI for discovery and Runtime health |
-| `audioplane-mcp` | Optional low-bandwidth MCP control server; PCM never travels through MCP |
-| `SDKs/python` | Primary async SDK, provider adapters, replay, activity/VAD, and duplex APIs |
-| `SDKs/typescript` | Typed Node.js client with capture, output, events, and duplex APIs |
-| `SonexisAudioEngine` | Repository-owned low-level Swift capture engine used by the Runtime |
-| `AudioPlaneHALDriver` | First-party `AudioPlane Input` virtual microphone driver |
-
-The previous `sonexis` Python import remains available as a compatibility alias.
-New applications should use:
-
-```python
-from audioplane import AudioPlane
-```
-
-## Runtime architecture
-
-The Runtime exposes two local-only Unix-domain-socket planes:
-
-- **Control plane:** protocol-v2 JSON requests, responses, errors, capability
-  negotiation, events, session lifecycle, and diagnostics.
-- **Data plane:** compact binary PCM frames for capture and playback, including
-  stream ID, sequence, timestamp, format, payload length, drop/discontinuity
-  state, and EOS.
-
-Realtime Core Audio callbacks never perform socket I/O, disk I/O, synchronous
-logging, or unbounded allocation. Bounded ring buffers isolate callbacks from
-conversion and client delivery. Slow consumers cause observable frame drops or
-disconnection according to the documented queue policy rather than unbounded
-memory growth.
-
-See [Runtime architecture and protocol](docs/sonexis-runtime.md) and
-[output audio](docs/output-audio.md) for wire formats and lifecycle rules.
-
-## AI integrations
-
-Optional adapters are installed explicitly:
-
-```bash
-python -m pip install -e "SDKs/python[gemini]"
-python -m pip install -e "SDKs/python[openai]"
-```
-
-Reference examples live in [`Examples/audio-agent`](Examples/audio-agent) and
-use only public SDK APIs. Provider credentials are read from environment
-configuration and are never embedded in the Runtime. See
-[AI integration](docs/ai-integration.md) for Gemini hybrid-VAD turn handling,
-OpenAI Realtime, response playback, and source-aware multi-stream examples.
-
-Your application chooses when to use captured audio:
-
-- **Realtime:** forward frames as they arrive to a live model or other consumer.
-- **Capture then analyze:** collect a bounded clip, then request a complete review.
-
-For the second workflow, install the Gemini extra with Python 3.10+ and run:
-
-```bash
-python Examples/capture-and-review.py \
-  --source "Google Chrome" --duration 205
-```
-
-Set `GEMINI_API_KEY` first using the hidden prompt in
-[getting started](docs/getting-started.md#review-a-complete-clip). The example
-keeps audio in memory and prints a review; it saves no PCM. Add `--capture-only`
-for a no-key, no-cloud first-audio check. See [workflow details](docs/developer-workflows.md).
-
-The installed CLI exposes that same implementation directly:
-
-```bash
-audioplane agent \
-  --provider gemini \
-  --gemini-model gemini-3.8-live \
-  --source "Google Chrome" \
-  --response-output default \
-  --gemini-barge-in \
-  --validate-live \
-  --debug
-```
-
-`--validate-live` reports per-turn finalization, provider-response, and output
-start timing without persisting PCM or transcript text.
-
-## Runtime lifecycle
-
-```bash
-./Scripts/runtime-dev.sh status
-./Scripts/runtime-dev.sh logs
-./Scripts/runtime-dev.sh stop
-./Scripts/runtime-dev.sh foreground
-./Scripts/uninstall-runtime-dev.sh
-```
-
-The development install lives under:
-
-```text
-~/Library/Application Support/SonexisRuntime/dev
-```
-
-## Development and tests
-
-In a logged-in macOS GUI session, `./Scripts/test-runtime-discovery.sh`
-checks application launch, termination, and relaunch against the actual Runtime
-without capturing audio. Set `AUDIOPLANE_TEST_GUI_DISCOVERY=1` to include it in
-the standalone/release gate; headless gates leave this GUI check out.
-
-Build the native products and engine package:
-
-```bash
-swift build -c release
-swift test
-swift test --package-path SonexisAudioEngine
-```
-
-Run focused SDK/package tests:
-
-```bash
-./Scripts/test-python-sdk.sh
-./Scripts/test-agent-torture.sh
-./Scripts/test-runtime-packages.sh
-```
-
-Run the complete automated release gate:
-
-```bash
-./Scripts/test-runtime-release.sh
-```
-
-The release gate covers Runtime protocol/core/output/integration/fuzz/stress
-tests, Thread Sanitizer, Python tests and packaging, TypeScript tests and
-packaging, more than one million deterministic agent-pipeline state
-transitions, embedded permission metadata, stable identifiers, and development
-signing. Real Process Tap acceptance is available separately on a logged-in Mac
-with capture permission and an installed loopback device:
-
-```bash
-./Scripts/test-runtime-live-io.sh
-# Or use BlackHole instead of AudioPlane Input:
-./Scripts/test-runtime-live-io.sh --loopback-uid BlackHole2ch_UID
-# Increase synthetic lifecycle churn to 10,000 capture and output cycles:
-./Scripts/test-runtime-soak.sh
-```
-
-The native acceptance test starts its own signed Runtime and two temporary
-quiet-tone apps. It exercises independent captures, multiple clients, labels,
-source exit/relaunch, duplex, flush, actual loopback, and SIGKILL/restart
-recovery. It uses public SDK APIs, never opens a physical microphone, never
-persists captured PCM, never calls a provider, and never installs a driver or
-changes the system's selected devices. It requires an existing signed build;
-run `./Scripts/build-signed-runtime-dev.sh` first if needed. To opt it into the
-complete release gate, set `AUDIOPLANE_TEST_LIVE_IO=1` (AudioPlane Input must
-already be installed). Audible physical-device output, hardware unplug/rate
-changes, and receiving-app interoperability still need manual validation.
-
-## Security and privacy
-
-AudioPlane binds only to private, same-user Unix sockets and never exposes a
-public network listener. The local macOS account is the trust boundary: another
-unsandboxed process running as the same user can use the Runtime's granted
-capture permission or inject audio into an output session. Do not run the
-Runtime as root or relocate its sockets into a shared directory.
-
-Audio is not logged or persisted by default. CLI recording is explicit, uses
-private regular files, and rejects symbolic-link targets. Provider adapters
-redact common credential forms from errors.
-
-See the full [security model](docs/sonexis-runtime.md#security-and-trust-model).
-
-## Current limitations
-
-- macOS only; no Windows or Linux backend
-- Development-signed source build rather than a notarized installer
-- Python SDK/CLI published as [1.0.0rc1 on PyPI](https://pypi.org/project/audioplane/1.0.0rc1/); Node package is not published to npm yet
-- The Runtime/CLI Swift executable names still use compatibility-era naming
-- No built-in acoustic echo cancellation
-- `AudioPlane Input` requires explicit system-wide installation and a reboot;
-  BlackHole remains the validated fallback
-- Live TCC, physical playback, and provider tests require manual interaction or
-  external credentials
+Each frame contains raw audio samples, source identity, format, timing, and drop
+information. Press **Ctrl+C** to stop. Replace `"Google Chrome"` with an exact
+name or ID from `audioplane sources`; ambiguous selections produce an error.
+
+Capture is **application-wide, not browser-tab-specific**. Pause other audible
+Chrome tabs if you want one video's audio. AudioPlane does not capture video
+frames or fetch website transcripts.
+
+## What happens after capture?
+
+Your application chooses how to consume the stream:
+
+- **Realtime:** process or forward each frame as it arrives, for live captions,
+  monitoring, or a realtime model.
+- **Capture then analyze:** collect a bounded clip and send it for a complete
+  review or summary after capture ends.
+- **Output:** send generated audio back through AudioPlane for playback. Routing
+  into another app requires a virtual input selected in that receiving app.
+
+See [Developer workflows](docs/developer-workflows.md) for both input patterns,
+[AI integration](docs/ai-integration.md) for Gemini/OpenAI examples, and
+[Output audio](docs/output-audio.md) for playback and duplex APIs.
+
+## What else is supported?
+
+- Multiple independent sources with labels and source-aware frames.
+- Application and microphone discovery, events, and structured errors.
+- PCM16 and Float32 audio, supported mono/stereo formats, and format conversion.
+- Bounded input/output buffering, backpressure, and observable drops.
+- Playback, flush/cancel primitives, and optional virtual-microphone routing.
+- Python and Node.js SDKs, diagnostics CLI, and optional control-only MCP.
+
+## Important boundaries
+
+- **Local macOS infrastructure:** not a browser SDK, cloud service, or ready-made
+  AI assistant. The Node package is not published to npm yet.
+- **No cloud required for basic I/O:** optional provider integrations send audio
+  to the chosen provider. Audio is not recorded to disk by default.
+- **Same-user trust:** other unsandboxed processes under your macOS account can
+  use the Runtime's granted permissions. Do not run it as root or expose its
+  sockets. Read the [security model](docs/sonexis-runtime.md#security-and-trust-model).
+- **No built-in acoustic echo cancellation or sample-accurate cross-source
+  synchronization.** Use headphones for voice-agent playback.
+- **Preview distribution:** no notarized Runtime installer yet; some hardware,
+  device-switching, and provider acceptance checks remain manual. See
+  [qualification evidence](docs/developer-workflows-validation.md).
 
 ## Documentation
 
-- [Runtime architecture, protocol, CLI, and troubleshooting](docs/sonexis-runtime.md)
-- [Python/AI integration](docs/ai-integration.md)
-- [Output and duplex audio](docs/output-audio.md)
-- [AudioPlane Input design](docs/audioplane-input-design.md)
-- [AudioPlane Input manual validation](docs/audioplane-input-manual-validation.md)
-- [Benchmarks](docs/runtime-benchmarks.md)
-- [Manual validation](docs/runtime-v1.0-manual-validation.md)
-- [Runtime 1.0 report](RUNTIME_V1_0_REPORT.md)
-- [Post-1.0 roadmap](docs/runtime-post-1.0-roadmap.md)
+- [Getting started](docs/getting-started.md) — installation, permissions, troubleshooting.
+- [Python SDK](SDKs/python/README.md) · [Node.js SDK](SDKs/typescript/README.md).
+- [Examples](Examples/README.md) — capture, playback, multi-source, and AI demos.
+- [Architecture and protocol](docs/sonexis-runtime.md) — sessions, sockets, framing, diagnostics.
+- [Development and testing](docs/development.md) — builds, release gates, and native acceptance.
+- [Full documentation index](docs/runtime-documentation.md).
 
 ## License
 
-AudioPlane is licensed under GPL-2.0-or-later. See [LICENSE](LICENSE).
+GPL-2.0-or-later. See [LICENSE](LICENSE).
