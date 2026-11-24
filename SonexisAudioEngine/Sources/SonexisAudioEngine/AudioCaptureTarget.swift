@@ -30,6 +30,7 @@ public struct AudioCaptureTarget: Codable, Equatable, Identifiable {
     public func contains(bundleID processBundleID: String, bundlePath processPath: String?, executablePath: String? = nil) -> Bool {
         if processBundleID == bundleID { return true }
         // Include embedded audio helpers, without matching unrelated bundle-ID prefixes.
+        guard !bundlePath.isEmpty else { return false }
         let embeddedPrefix = bundlePath + "/Contents/"
         return [processPath, executablePath].compactMap { $0 }.contains { $0.hasPrefix(embeddedPrefix) }
     }
@@ -47,25 +48,42 @@ public struct AudioCaptureTarget: Codable, Equatable, Identifiable {
             objectID: AudioObjectID(kAudioObjectSystemObject), selector: kAudioHardwarePropertyProcessObjectList,
             operation: "Read audio processes")
         return objects.filter { object in
-            guard object != ownID,
-                  let pid: pid_t = try? CoreAudioSupport.readScalar(objectID: object,
-                    selector: kAudioProcessPropertyPID, defaultValue: pid_t(0), operation: "Read audio process PID"),
-                  pid != ProcessInfo.processInfo.processIdentifier else { return false }
-            let app = NSRunningApplication(processIdentifier: pid)
-            let id = (try? CoreAudioSupport.readString(objectID: object,
-                selector: kAudioProcessPropertyBundleID, operation: "Read audio process bundle")) ?? app?.bundleIdentifier ?? ""
-            if contains(bundleID: id, bundlePath: app?.bundleURL?.path) { return true }
-            // Headless/sandboxed audio helpers may not be represented by
-            // NSRunningApplication. Resolve their executable without trusting
-            // a bundle-ID prefix, which could include a different app.
-            var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
-            let length = proc_pidpath(pid, &path, UInt32(path.count))
-            let executable = length > 0 ? String(cString: path) : nil
-            if contains(bundleID: id, bundlePath: nil, executablePath: executable) { return true }
-            guard app?.activationPolicy != .regular else { return false }
-            return containsOwnedHelper(isRegularApplication: false,
-                responsibleBundleID: ProcessResponsibility.bundleID(for: pid))
+            guard object != ownID, let process = AudioProcessIdentity(object: object) else { return false }
+            return containsProcess(process)
         }.sorted()
+    }
+
+    func containsProcess(_ process: AudioProcessIdentity) -> Bool {
+        contains(bundleID: process.bundleID, bundlePath: process.bundlePath,
+                 executablePath: process.executablePath)
+            || containsOwnedHelper(isRegularApplication: process.isRegularApplication,
+                                   responsibleBundleID: process.responsibleBundleID)
+    }
+}
+
+struct AudioProcessIdentity {
+    let bundleID: String
+    let bundlePath: String?
+    let executablePath: String?
+    let isRegularApplication: Bool
+    let responsibleBundleID: String?
+
+    init?(object: AudioObjectID) {
+        guard let pid = try? CoreAudioSupport.readScalar(objectID: object,
+            selector: kAudioProcessPropertyPID, defaultValue: pid_t(0), operation: "Read audio process PID"),
+            pid > 0, pid != ProcessInfo.processInfo.processIdentifier else { return nil }
+
+        let app = NSRunningApplication(processIdentifier: pid)
+        bundleID = (try? CoreAudioSupport.readString(objectID: object,
+            selector: kAudioProcessPropertyBundleID, operation: "Read audio process bundle")) ?? app?.bundleIdentifier ?? ""
+        bundlePath = app?.bundleURL?.path
+        isRegularApplication = app?.activationPolicy == .regular
+
+        // Embedded audio helpers may have no NSRunningApplication entry.
+        var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        let length = proc_pidpath(pid, &path, UInt32(path.count))
+        executablePath = length > 0 ? String(cString: path) : nil
+        responsibleBundleID = isRegularApplication ? nil : ProcessResponsibility.bundleID(for: pid)
     }
 }
 

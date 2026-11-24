@@ -25,7 +25,7 @@ public final class AudioSourceRegistry {
     public func availableSources() throws -> [AudioSource] {
         // Application enumeration remains useful when HAL discovery is
         // temporarily unavailable (including before capture permission settles).
-        let audioPIDs = try? currentAudioProcessIDs()
+        let outputProcesses = try? currentOutputProcesses()
         let nativeFormat = try? defaultOutputFormat()
         let ownPID = ProcessInfo.processInfo.processIdentifier
         let ownBundleID = Bundle.main.bundleIdentifier
@@ -48,12 +48,11 @@ public final class AudioSourceRegistry {
         return applicationsByBundleID.map { bundleID, applications in
             let sortedApplications = applications.sorted { $0.processIdentifier < $1.processIdentifier }
             let processIDs = sortedApplications.map(\.processIdentifier)
-            // HAL process-list membership is only an activity heuristic; nil
-            // means the registry could not determine it.
-            let isProducingAudio = audioPIDs.map { audioPIDs in
-                processIDs.contains { audioPIDs.contains($0) }
-            }
             let representative = sortedApplications[0]
+            let target = AudioCaptureTarget(bundleID: bundleID, name: representative.localizedName ?? bundleID,
+                                            bundlePath: representative.bundleURL?.path ?? "")
+            // Use the same ownership rules as the app tap, including browser audio helpers.
+            let isProducingAudio = outputProcesses.map { $0.contains(where: target.containsProcess) }
             return AudioSource(
                 id: AudioSource.applicationID(bundleIdentifier: bundleID),
                 kind: .application,
@@ -78,20 +77,18 @@ public final class AudioSourceRegistry {
         return source
     }
 
-    private func currentAudioProcessIDs() throws -> Set<pid_t> {
+    private func currentOutputProcesses() throws -> [AudioProcessIdentity] {
         let objectIDs = try CoreAudioSupport.readAudioObjectIDArray(
             objectID: AudioObjectID(kAudioObjectSystemObject),
             selector: kAudioHardwarePropertyProcessObjectList,
             operation: "Read audio process list for source discovery"
         )
-        return Set(objectIDs.compactMap { objectID in
-            try? CoreAudioSupport.readScalar(
-                objectID: objectID,
-                selector: kAudioProcessPropertyPID,
-                defaultValue: pid_t(0),
-                operation: "Read audio source process PID"
-            )
-        }.filter { $0 > 0 })
+        return objectIDs.compactMap { objectID in
+            let running = try? CoreAudioSupport.readScalar(
+                objectID: objectID, selector: kAudioProcessPropertyIsRunningOutput,
+                defaultValue: UInt32(0), operation: "Read process output activity")
+            return running == 1 ? AudioProcessIdentity(object: objectID) : nil
+        }
     }
 
     private func defaultOutputFormat() throws -> AudioStreamDescription? {
