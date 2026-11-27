@@ -5,15 +5,19 @@ import AVFoundation
 let app = NSApplication.shared
 app.setActivationPolicy(.regular)
 let frequency = Double(CommandLine.arguments[1])!
+let bursts = CommandLine.arguments.dropFirst(3).contains("--bursts")
 try String(ProcessInfo.processInfo.processIdentifier).write(
     toFile: CommandLine.arguments[2], atomically: true, encoding: .utf8)
 let engine = AVAudioEngine()
 let format = engine.outputNode.inputFormat(forBus: 0)
 var position: Int64 = 0
+let cycleFrames = Int64(format.sampleRate * 2.5)
+let activeFrames = Int64(format.sampleRate * 0.65)
 let source = AVAudioSourceNode { _, _, count, data -> OSStatus in
     let buffers = UnsafeMutableAudioBufferListPointer(data)
     for frame in 0..<Int(count) {
-        let sample = Float(0.01 * sin(2 * Double.pi * frequency * Double(position) / format.sampleRate))
+        let amplitude = bursts ? (position % cycleFrames < activeFrames ? 0.03 : 0.0) : 0.01
+        let sample = Float(amplitude * sin(2 * Double.pi * frequency * Double(position) / format.sampleRate))
         for buffer in buffers {
             guard let pointer = buffer.mData?.assumingMemoryBound(to: Float.self) else { continue }
             for channel in 0..<Int(buffer.mNumberChannels) {

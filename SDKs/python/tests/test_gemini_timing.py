@@ -10,6 +10,26 @@ from sonexis.providers.gemini import GeminiLiveSink
 
 
 class GeminiFinalizationTimingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_normalized_input_transcript_is_opt_in_and_separate_from_response(self):
+        class Session:
+            async def receive(self):
+                yield SimpleNamespace(server_content=SimpleNamespace(
+                    input_transcription=SimpleNamespace(text="incoming words"),
+                    output_transcription=SimpleNamespace(text="reply")))
+
+        for enabled in (False, True):
+            sink = GeminiLiveSink(Session(), blob_factory=dict, emit_input_transcripts=enabled)
+            events = sink.events()
+            if enabled:
+                incoming = await events.__anext__()
+                self.assertEqual((incoming.type, incoming.text), ("input_transcription", "incoming words"))
+                self.assertFalse(incoming.response_started)
+            response = await events.__anext__()
+            self.assertEqual((response.type, response.text), ("output_transcription", "reply"))
+            self.assertTrue(response.response_started)
+            await events.aclose()
+            await sink.aclose()
+
     async def test_response_during_stream_end_ack_does_not_seed_next_latency(self):
         messages=asyncio.Queue();ending=asyncio.Event();ack=asyncio.Event()
         class Session:

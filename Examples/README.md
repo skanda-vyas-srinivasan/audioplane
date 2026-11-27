@@ -16,6 +16,13 @@ installed; the native Runtime is a separate prerequisite for live audio.
 | labeled independent sources | `python Examples/capture-multiple-sources.py conversation=Discord media=Spotify` |
 | Runtime-owned playback | `python Examples/playback.py /path/to/response.wav --destination default` |
 | input/output ownership | `python Examples/duplex.py Discord --destination default` |
+| activity callbacks from a WAV | `python Examples/event-driven-audio.py --wav recording.wav` |
+| buffered utterance boundaries from a WAV | `python Examples/event-driven-audio.py --wav recording.wav --utterances` |
+| live activity with PCM response | `python Examples/event-driven-audio.py --source Discord --destination default` |
+| recover a selected live source after relaunch | `python Examples/event-driven-audio.py --source Discord --recover` |
+| voice participant using local speech and a virtual microphone | `python Examples/voice-participant.py --source Discord --destination "AudioPlane Input"` |
+| automated local tone notification from a recording | `python Examples/audio-automation.py --wav recording.wav --frequency 440` |
+| realtime incoming speech transcript updates | `audioplane agent --provider gemini --source Discord --input-transcripts` |
 | minimal provider response playback | `python Examples/provider-output.py Discord` |
 | agent policy over two labeled sources | `python Examples/multi-source-agent.py Discord Spotify` |
 | Gemini or OpenAI | `python Examples/audio-agent/audio_agent.py --help` |
@@ -25,6 +32,19 @@ installed; the native Runtime is a separate prerequisite for live audio.
 The duplex example uses matching 16 kHz input/output and echoes captured audio
 only to make data flow visible. Use headphones. Provider adapters declare their
 own output format and should not blindly echo capture bytes.
+
+The [event-driven session](../docs/event-driven-audio-design.md) reports activity
+onset and silence using local signal energy. WAV replay without a destination
+runs without the native Runtime. Set `--destination` to play a short tone on
+each onset. Use headphones when pairing microphone capture and playback.
+
+For the voice participant, select AudioPlane Input as the microphone in the
+receiving app. Keep its speaker route separate from the virtual microphone and
+disable microphone monitoring in the app. The default example responds to
+activity with a fixed sentence rendered by macOS. `--speech-only` selects the
+optional WebRTC VAD. `--transcribe --trigger "your phrase"` opts into uploading
+utterances to OpenAI and applies a case-insensitive phrase match before replying.
+That mode uses the existing OpenAI extra and `OPENAI_API_KEY`.
 
 The TypeScript example is a standalone ESM package consumer. In a Node 18+
 project, install the packed SDK plus `typescript` and `@types/node`, then compile

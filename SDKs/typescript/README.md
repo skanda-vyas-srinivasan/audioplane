@@ -49,6 +49,33 @@ try {
 }
 ```
 
+## Activity sessions
+
+`AudioSession` owns one capture and optional playback on a connected client.
+Register callbacks with `onActivity()` before `run()`. Callbacks run in order
+on the capture consumer. A session is single-use and leaves the client's
+control connection open.
+
+```ts
+import { AudioSession, Sonexis } from "@sonexis/runtime";
+
+const client = await Sonexis.connect();
+try {
+  const session = new AudioSession(client, "Discord");
+  session.onActivity((event) => console.log(event.type, event.sourceId));
+  await session.run();
+} finally {
+  await client.close();
+}
+```
+
+Pass `{ output: { destination: "AudioPlane Input" } }` to enable `playPcm()`
+and `interruptPlayback()`. Use `run({ signal })` to stop capture and discard
+pending output on abort. The signal is also passed to callbacks so they can
+cancel their own work. For custom speech classification, pass
+`voiceActivityDetector` in the session options.
+Use `onFrame()` to inspect raw PCM and stream metadata before activity detection.
+
 ## Naming and wire models
 
 Public methods and SDK-owned convenience fields use idiomatic TypeScript

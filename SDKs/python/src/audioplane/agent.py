@@ -1080,6 +1080,8 @@ def add_agent_arguments(
                         help="brief non-speech gaps tolerated while confirming an onset")
     parser.add_argument("--gemini-vad", choices=("webrtc", "energy"), default="webrtc",
                         help="local speech classifier (default: webrtc; energy is loudness only)")
+    parser.add_argument("--input-transcripts", action="store_true",
+                        help="Print Gemini's incoming speech transcription updates")
     parser.add_argument("--gemini-vad-mode", type=int, choices=(0, 1, 2, 3), default=2,
                         help="WebRTC noise filtering aggressiveness, from 0 to 3 (default: 2)")
     parser.add_argument(
@@ -1105,6 +1107,8 @@ async def create_sink(
     lifecycle_callback: Optional[
         Callable[[ProviderLifecycleEvent], None]] = None,
 ) -> RealtimeAudioSink:
+    if getattr(args, "input_transcripts", False) and args.provider != "gemini":
+        raise ValueError("--input-transcripts requires --provider gemini")
     if args.provider == "openai":
         return await OpenAIRealtimeSink.connect()
     if args.provider == "gemini":
@@ -1136,6 +1140,7 @@ async def create_sink(
             turn_detection=turn_detection,
             voice_activity_detector=detector,
             debug_callback=debug_callback,
+            emit_input_transcripts=getattr(args, "input_transcripts", False),
             lifecycle_callback=lifecycle_callback,
         )
     return MockRealtimeSink(AudioFormat(
@@ -1210,7 +1215,8 @@ async def print_provider_events(
             if event.response_started and input_forwarder is not None:
                 input_forwarder.pause()
             if event.text:
-                print(f"\nAgent ({terminal_safe(event.provider)}): {terminal_safe(event.text)}")
+                label = "Input" if event.type == "input_transcription" else "Agent"
+                print(f"\n{label} ({terminal_safe(event.provider)}): {terminal_safe(event.text)}")
             if event.audio and response_player is not None:
                 await response_player.write(event)
             elif event.audio and debug:

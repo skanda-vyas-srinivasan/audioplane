@@ -177,6 +177,10 @@ export interface DuplexOptions {
   inputFormat?: AudioFormat;
   output?: OutputOptions;
 }
+export interface AudioSessionOptions extends DuplexOptions {
+  activity?: ActivityDetectionOptions;
+  voiceActivityDetector?: VoiceActivityDetector;
+}
 export interface MicrophonePassthroughOptions {
   source?: SourceSelector;
   destination?: OutputDestinationSelector;
@@ -2245,6 +2249,104 @@ export class DuplexSession {
     const failure = results.find((result): result is PromiseRejectedResult =>
       result.status === "rejected");
     if (failure) throw failure.reason;
+  }
+}
+
+/** A single live input with activity callbacks and optional PCM playback. */
+export class AudioSession {
+  private readonly detector: AudioActivityDetector;
+  private readonly handlers: Array<(event: ActivityEvent, signal?: AbortSignal) => void | Promise<void>> = [];
+  private readonly frameHandlers: Array<(frame: AudioFrame, signal?: AbortSignal) => void | Promise<void>> = [];
+  private started = false;
+  private output?: AudioOutput;
+  private signal?: AbortSignal;
+
+  constructor(private readonly client: Sonexis, private readonly source: SourceSelector,
+              private readonly options: AudioSessionOptions = {}) {
+    this.detector = new AudioActivityDetector(options.activity, options.voiceActivityDetector);
+  }
+
+  onActivity(handler: (event: ActivityEvent, signal?: AbortSignal) => void | Promise<void>): this {
+    if (this.started) throw new SonexisError("session_started", "Register activity handlers before running");
+    this.handlers.push(handler);
+    return this;
+  }
+
+  onFrame(handler: (frame: AudioFrame, signal?: AbortSignal) => void | Promise<void>): this {
+    if (this.started) throw new SonexisError("session_started", "Register frame handlers before running");
+    this.frameHandlers.push(handler);
+    return this;
+  }
+
+  async run({ signal }: { signal?: AbortSignal } = {}): Promise<void> {
+    if (this.started) throw new SonexisError("session_started", "AudioSession.run() can only be called once");
+    if (signal?.aborted) throw abortError();
+    this.started = true;
+    this.signal = signal;
+    let input: CaptureStream | undefined;
+    let output: AudioOutput | undefined;
+    let completed = false;
+    const onAbort = (): void => {
+      // Closing wakes a blocked capture read and drops submitted output. The
+      // finally block awaits both resources and handles cleanup outcomes.
+      void input?.close().catch(() => undefined);
+      void output?.close({ drain: false }).catch(() => undefined);
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    try {
+      const inputFormat = this.options.inputFormat ?? AudioFormats.speech16k();
+      input = await this.client.capture(this.source, inputFormat);
+      if (signal?.aborted) throw abortError();
+      if (this.options.output) {
+        output = await this.client.playback({ ...this.options.output,
+          format: this.options.output.format ?? inputFormat });
+        if (signal?.aborted) throw abortError();
+        this.output = output;
+      }
+      for await (const frame of input) {
+        if (signal?.aborted) throw abortError();
+        for (const handler of this.frameHandlers) {
+          await handler(frame, signal);
+          if (signal?.aborted) throw abortError();
+        }
+        if (!this.handlers.length) continue;
+        const event = this.detector.observe(frame);
+        if (event) {
+          for (const handler of this.handlers) {
+            await handler(event, signal);
+            if (signal?.aborted) throw abortError();
+          }
+        }
+      }
+      if (signal?.aborted) throw abortError();
+      completed = true;
+    } finally {
+      this.output = undefined;
+      this.signal = undefined;
+      try {
+        const results = await Promise.allSettled([input?.close(), output?.close({ drain: completed })]);
+        if (completed) {
+          if (signal?.aborted) throw abortError();
+          const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+          if (failed) throw failed.reason;
+        }
+      } finally {
+        signal?.removeEventListener("abort", onAbort);
+      }
+    }
+  }
+
+  async playPcm(data: Buffer | Uint8Array): Promise<void> {
+    await this.activeOutput().write(data, { signal: this.signal });
+  }
+
+  async interruptPlayback(): Promise<void> {
+    await this.activeOutput().flush();
+  }
+
+  private activeOutput(): AudioOutput {
+    if (!this.output) throw new SonexisError("session_output_inactive", "Start a session with an output destination");
+    return this.output;
   }
 }
 

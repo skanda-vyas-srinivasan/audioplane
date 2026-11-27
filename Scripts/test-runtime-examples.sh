@@ -15,6 +15,9 @@ for example in \
     capture-multiple-sources.py \
     playback.py \
     duplex.py \
+    event-driven-audio.py \
+    voice-participant.py \
+    audio-automation.py \
     python-runtime-client.py \
     python-runtime-monitor.py \
     multi-source-runtime.py \

@@ -92,6 +92,7 @@ class GeminiLiveSink:
                  turn_detection: Optional[GeminiTurnDetectionConfig] = None,
                  voice_activity_detector: Optional[VoiceActivityDetector] = None,
                  debug_callback: Optional[Callable[[str], None]] = None,
+                 emit_input_transcripts: bool = False,
                  lifecycle_callback: Optional[
                      Callable[[ProviderLifecycleEvent], None]] = None) -> None:
         self._session = session
@@ -116,6 +117,7 @@ class GeminiLiveSink:
             voice_activity_detector=voice_activity_detector,
         )
         self._debug_callback = debug_callback
+        self._emit_input_transcripts = emit_input_transcripts
         self._lifecycle_callback = lifecycle_callback
         self._candidate_frames: List[AudioFrame] = []
         self._pending_audio = bytearray()
@@ -143,6 +145,7 @@ class GeminiLiveSink:
         turn_detection: Optional[GeminiTurnDetectionConfig] = None,
         voice_activity_detector: Optional[VoiceActivityDetector] = None,
         debug_callback: Optional[Callable[[str], None]] = None,
+        emit_input_transcripts: bool = False,
         lifecycle_callback: Optional[
             Callable[[ProviderLifecycleEvent], None]] = None,
     ) -> "GeminiLiveSink":
@@ -177,6 +180,7 @@ class GeminiLiveSink:
                        turn_detection=selected_turn_detection,
                        voice_activity_detector=voice_activity_detector,
                        debug_callback=debug_callback,
+                       emit_input_transcripts=emit_input_transcripts,
                        lifecycle_callback=lifecycle_callback)
         except BaseException as error:
             close = getattr(client, "close", None)
@@ -357,6 +361,10 @@ class GeminiLiveSink:
                         self._debug(f"Gemini heard: {input_text}")
                     elif isinstance(interim_text, str) and interim_text:
                         self._debug(f"Gemini hearing: {interim_text}")
+                    heard = input_text or interim_text
+                    if self._emit_input_transcripts and isinstance(heard, str) and heard:
+                        yield ProviderEvent("gemini", "input_transcription", text=heard,
+                                            **self._validator.event_fields())
                     transcription = getattr(server, "output_transcription", None)
                     text = getattr(transcription, "text", None) or getattr(value, "text", None)
                     audio_parts = []

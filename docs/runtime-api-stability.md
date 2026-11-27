@@ -40,6 +40,11 @@ core is:
   permission, limits, slow-consumer, protocol, connection, capture, and output;
 - activity/VAD primitives, latency tracker/receipts, and deterministic replay.
 
+The `audioplane` checkout also exports the higher-level `AudioSession`, bounded
+conversation and utterance types, speech provider protocols, and
+`run_recovering_session`. Their usage and coverage are documented in
+[Event-driven audio sessions](event-driven-audio-design.md).
+
 Provider adapters under `sonexis.providers` and the control-only MCP server are
 **experimental integrations**. Their dependency SDKs and upstream wire behavior
 can change independently. They use stable Sonexis streams but are not required

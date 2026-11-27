@@ -6,31 +6,18 @@ from dataclasses import asdict, is_dataclass
 from enum import Enum
 import json
 import os
-from pathlib import Path
-import shutil
-import subprocess
 import sys
-import tempfile
 from typing import Any, Callable, Optional, Sequence
-import wave
 
-from sonexis import (AudioFormat, AudioOutputDestination, AudioSource, RuntimeStatus,
-                     SampleFormat, Sonexis)
+from sonexis import AudioOutputDestination, AudioSource, RuntimeStatus, Sonexis
 from sonexis.errors import SonexisError
 
 from . import __version__
+from .macos_speech import (MACOS_SPEECH_FORMAT as _SPEAK_FORMAT,
+                           SpeechSynthesisError, synthesize_speech as _synthesize_speech)
 
 
 _AUDIOPLANE_INPUT_ID = "coreaudio:com.audioplane.input.device"
-_SPEAK_FORMAT = AudioFormat(
-    sample_rate=48_000,
-    channels=1,
-    sample_format=SampleFormat.PCM_S16LE,
-)
-
-
-class SpeechSynthesisError(RuntimeError):
-    """Raised when the local macOS speech synthesizer cannot produce PCM."""
 
 
 def _positive_integer(value: str) -> int:
@@ -116,79 +103,6 @@ def _parser() -> argparse.ArgumentParser:
     from .agent import add_agent_arguments
     add_agent_arguments(agent, include_socket=False)
     return parser
-
-
-def _command_failure(tool: str, result: subprocess.CompletedProcess) -> SpeechSynthesisError:
-    message = (result.stderr or result.stdout or "unknown error").strip()
-    return SpeechSynthesisError(f"{tool} failed: {message}")
-
-
-def _synthesize_speech(text: str, voice: Optional[str], rate: Optional[int]) -> bytes:
-    """Render one line with macOS ``say`` as PCM16 mono at 48 kHz."""
-    say = shutil.which("say")
-    afconvert = shutil.which("afconvert")
-    if say is None or afconvert is None:
-        missing = "say" if say is None else "afconvert"
-        raise SpeechSynthesisError(
-            f"macOS speech tool {missing!r} is unavailable; speak requires macOS")
-
-    with tempfile.TemporaryDirectory(prefix="audioplane-speak-") as directory:
-        source = Path(directory) / "speech.aiff"
-        converted = Path(directory) / "speech.wav"
-        say_command = [say]
-        if voice:
-            say_command.extend(["-v", voice])
-        if rate is not None:
-            say_command.extend(["-r", str(rate)])
-        say_command.extend(["-o", str(source), text])
-
-        try:
-            result = subprocess.run(
-                say_command, capture_output=True, text=True, check=False)
-        except OSError as error:
-            raise SpeechSynthesisError(f"could not run say: {error}") from error
-        if result.returncode != 0:
-            raise _command_failure("say", result)
-
-        try:
-            result = subprocess.run(
-                [
-                    afconvert,
-                    "-f", "WAVE",
-                    "-d", "LEI16@48000",
-                    "-c", "1",
-                    str(source),
-                    str(converted),
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-        except OSError as error:
-            raise SpeechSynthesisError(f"could not run afconvert: {error}") from error
-        if result.returncode != 0:
-            raise _command_failure("afconvert", result)
-
-        try:
-            with wave.open(str(converted), "rb") as stream:
-                actual = (
-                    stream.getframerate(),
-                    stream.getnchannels(),
-                    stream.getsampwidth(),
-                    stream.getcomptype(),
-                )
-                expected = (48_000, 1, 2, "NONE")
-                if actual != expected:
-                    raise SpeechSynthesisError(
-                        "speech conversion produced an unexpected audio format "
-                        f"(rate={actual[0]}, channels={actual[1]}, bytes={actual[2]}, "
-                        f"compression={actual[3]})")
-                pcm = stream.readframes(stream.getnframes())
-        except (OSError, EOFError, wave.Error) as error:
-            raise SpeechSynthesisError(f"could not read synthesized speech: {error}") from error
-        if not pcm:
-            raise SpeechSynthesisError("macOS speech synthesis produced no audio")
-        return pcm
 
 
 def _jsonable(value: Any) -> Any:

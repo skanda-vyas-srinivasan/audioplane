@@ -1,5 +1,98 @@
 # Sonexis Runtime benchmarks
 
+## AudioSession callback latency
+
+Run the signed Runtime probe with the installed AudioPlane Input virtual device.
+It injects generated PCM and captures the virtual microphone.
+
+```sh
+./Scripts/test-runtime-live-io.sh --activity-latency-only
+```
+
+The probe warms up one capture and measures 20 output sessions. For each trial,
+it measures from immediately before the Python PCM write to entry into the
+`activity_started` callback. The result includes the output transport, virtual
+device, capture transport, Python scheduling, and 30 ms detector debounce.
+Every trial also checks that silence rearms the detector and playback drains
+without reported drops. The probe reports minimum, median, nearest-rank p95,
+and maximum. Use those figures as a baseline for this device and configuration.
+
+On November 25, 2026, the Apple M4/macOS 27.0 host measured 43.90 ms minimum,
+48.18 ms median, 53.83 ms p95, and 54.25 ms maximum with the signed Runtime.
+
+The full `./Scripts/test-runtime-live-io.sh` adds live process taps and reports
+the time from terminating a synthetic app to the SDK capture error, plus the
+time from relaunch to verifying the new stream's waveform. A single run on the
+same build observed `capture_failed` after 962.63 ms and verified the relaunched
+app's waveform after 788.43 ms. Physical device unplug and replug require a
+separately attached test device.
+
+The full acceptance check also exercises `run_recovering_session()` against a
+terminated and relaunched test app. It verifies that the recovered stream has a
+new capture session and stream ID and retains the original logical source ID.
+
+A signed Runtime barge-in check used replay to trigger interruption during a
+400 Hz response on AudioPlane Input. The flush finished 1.00 ms after delivery
+of the first interrupting frame. The capture saw three quiet packets by 51.86 ms
+and then received the 800 Hz replacement response from the same session. These
+figures describe one virtual loopback run with replay-paced input.
+
+## Reproducible two-turn voice scenario
+
+Use `--voice-scenario-only` with a signed Runtime and an idle installed virtual
+loopback. The scenario replays two generated PCM turns with seeded background
+noise. It waits for the actual loopback capture to hear the first reply before
+delivering the interruption. The test verifies that the first response was cut
+short, the capture heard three consecutive quiet packets, and a different
+reply rendered through the same output session. Distinct response tones make
+these checks independent of transcription or synthesis services.
+
+```sh
+./Scripts/test-runtime-live-io.sh --voice-scenario-only
+./Scripts/test-runtime-live-io.sh --voice-scenario-only \
+  --voice-noise-amplitude 200 --max-interruption-ms 150 \
+  --voice-artifacts /tmp/audioplane-voice-scenario
+```
+
+The JSON report measures each reply from its request to its first matching
+capture packet, plus the time from delivery of the first interrupting replay
+frame to the post-flush onset callback and to verified quiet. The optional
+artifact directory gets `loopback-1/input.wav`, `captured-response.wav`, and
+`report.json`. A new numbered directory is created for each selected route.
+The scenario evaluates routing and timing. Its generated turns use signal
+energy for detection and its replies use tones for waveform verification.
+
+On this host, BlackHole returned silence while its Core Audio master mute was
+enabled on the input and output scopes. The diagnostic read left device settings
+in place. Use AudioPlane Input for the verified virtual route.
+
+## External participant and physical hot-plug checks
+
+The participant acceptance mode launches a synthetic macOS app with audio
+bursts, captures that app via Process Taps, and verifies the Python participant's
+locally synthesized reply through AudioPlane Input.
+
+```sh
+./Scripts/test-runtime-live-io.sh --voice-participant-only
+```
+
+The separate hot-plug mode takes the exact Runtime microphone ID of a removable
+device. An optional playback ID checks a pinned output on that same device.
+The check prompts for disconnect and reconnect, discards all capture samples,
+and reports the time from input rediscovery to the first PCM packet on a new
+stream. When testing a pinned output, it verifies the disconnect error and a
+fresh output stream after reconnect.
+
+```sh
+./Scripts/test-runtime-live-io.sh --hotplug-source 'microphone:YOUR_DEVICE_UID' \
+  --hotplug-output 'coreaudio:YOUR_DEVICE_UID'
+./Scripts/test-runtime-live-io.sh --default-route-change
+```
+
+Default-route mode observes a switch and restoration while checking that the
+output keeps its original stream. It leaves the device controls to the operator
+and plays no audio.
+
 ## 1.0 release-candidate gate
 
 The definitive automated 1.0 gate ran on 2026-09-27 against committed source
