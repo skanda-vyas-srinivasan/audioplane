@@ -51,7 +51,7 @@ final class AudioCaptureSession: @unchecked Sendable {
     private let deliveryQueueKey = DispatchSpecificKey<UInt8>()
     private let deliveryCapacity = DispatchSemaphore(value: 32)
     private let queueKey = DispatchSpecificKey<UInt8>()
-    private let target: AudioCaptureTarget
+    private let target: AudioCaptureTarget?
     private let propertyListeners: CapturePropertyListeners
     private var tapEngine: TapCaptureEngine?
     private var ringBuffer: RealtimeRingBuffer?
@@ -89,13 +89,13 @@ final class AudioCaptureSession: @unchecked Sendable {
         onTermination: (@Sendable (UUID) -> Void)?,
         propertyListeners: CapturePropertyListeners = .live
     ) throws {
-        guard source.kind == .application else {
+        guard source.kind == .application || source.kind == .systemMix else {
             throw AudioCaptureError.unsupportedSource(source.kind)
         }
         self.id = id
         self.source = source
         self.outputFormat = outputFormat
-        self.target = try AudioCaptureTarget(source: source)
+        self.target = source.kind == .application ? try AudioCaptureTarget(source: source) : nil
         self.frameHandler = frameHandler
         self.onTermination = onTermination
         self.propertyListeners = propertyListeners
@@ -193,9 +193,11 @@ final class AudioCaptureSession: @unchecked Sendable {
     }
 
     private func buildPipeline() throws {
-        let selectedProcessIDs = try target.processObjectIDs(excluding: kAudioObjectUnknown)
-        guard !selectedProcessIDs.isEmpty else {
-            throw AudioCaptureError.sourceUnavailable(source.id)
+        if let target {
+            let selectedProcessIDs = try target.processObjectIDs(excluding: kAudioObjectUnknown)
+            guard !selectedProcessIDs.isEmpty else {
+                throw AudioCaptureError.sourceUnavailable(source.id)
+            }
         }
 
         let outputDeviceID = try CoreAudioSupport.defaultOutputDevice()

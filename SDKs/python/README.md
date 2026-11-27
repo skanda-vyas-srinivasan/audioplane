@@ -130,6 +130,11 @@ PYTHONPATH="$PWD/SDKs/python/src" /usr/bin/python3 -m unittest discover \
 
 ## Capture one application
 
+For whole-desktop output audio, pass `"system_mix"` to `capture(...)` instead of
+an application selector. The Runtime must be rebuilt from a checkout containing
+that source; older preview Runtime builds do not expose it. Microphones remain
+separate sources.
+
 Start with [getting started](https://github.com/skanda-vyas-srinivasan/audioplane/blob/python-v1.0.0rc1/docs/getting-started.md) for permissions and
 separate Runtime installation. Choose [realtime or capture-then-analysis](https://github.com/skanda-vyas-srinivasan/audioplane/blob/python-v1.0.0rc1/docs/developer-workflows.md)
 based on your application; neither requires implementing Core Audio.

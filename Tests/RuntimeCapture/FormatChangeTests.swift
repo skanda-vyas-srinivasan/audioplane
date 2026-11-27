@@ -32,6 +32,20 @@ private final class Listeners {
 }
 
 final class FormatChangeTests: XCTestCase {
+    func testSystemMixSessionUsesExistingDefaultOutputObserver() throws {
+        let listeners = Listeners()
+        let source = AudioSource(id: "system_mix", kind: .systemMix,
+            name: "Desktop Audio (Default Output)", state: .active)
+        let capture = try AudioCaptureSession(source: source, frameHandler: nil,
+            onTermination: nil, propertyListeners: listeners.operations)
+        try capture.installDefaultOutputListener()
+        XCTAssertTrue(listeners.properties.contains(Property(
+            object: AudioObjectID(kAudioObjectSystemObject),
+            selector: kAudioHardwarePropertyDefaultOutputDevice,
+            scope: kAudioObjectPropertyScopeGlobal)))
+        capture.stop()
+        XCTAssertTrue(listeners.properties.isEmpty)
+    }
     private func settle(_ queue: DispatchQueue) {
         let settled = expectation(description: "queued format callbacks settled")
         queue.asyncAfter(deadline: .now() + .milliseconds(150)) { settled.fulfill() }

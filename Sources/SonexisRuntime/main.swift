@@ -32,6 +32,7 @@ private final class RuntimeCaptureSessionAdapter: RuntimeBackendCaptureSession, 
 }
 
 private final class SonexisCaptureBackend: RuntimeCaptureBackend, @unchecked Sendable {
+    private static let systemMixID = "system_mix"
     private static let microphonePrefix = "microphone:"
     private let registry = AudioSourceRegistry()
     private let manager = AudioCaptureManager()
@@ -88,7 +89,10 @@ private final class SonexisCaptureBackend: RuntimeCaptureBackend, @unchecked Sen
                 nativeFormat: nativeFormat,
                 isDefault: deviceID == defaultInput)
         }
-        return applications + microphones
+        let desktop = RuntimeSourceDTO(id: Self.systemMixID, kind: .systemMix,
+            name: "Desktop Audio (Default Output)", isActive: true, isAvailable: true,
+            isDefault: true)
+        return [desktop] + applications + microphones
     }
 
     func startCapture(
@@ -120,10 +124,15 @@ private final class SonexisCaptureBackend: RuntimeCaptureBackend, @unchecked Sen
             }
         }
         let source: AudioSource
-        do {
-            source = try registry.source(id: sourceID)
-        } catch {
-            throw RuntimeErrorDTO(code: "source_unavailable", message: "Audio source is not active: \(sourceID)")
+        if sourceID == Self.systemMixID {
+            source = AudioSource(id: Self.systemMixID, kind: .systemMix,
+                name: "Desktop Audio (Default Output)", state: .active)
+        } else {
+            do {
+                source = try registry.source(id: sourceID)
+            } catch {
+                throw RuntimeErrorDTO(code: "source_unavailable", message: "Audio source is not active: \(sourceID)")
+            }
         }
         guard source.state == .active else {
             throw RuntimeErrorDTO(code: "source_unavailable", message: "Audio source is not active: \(sourceID)")

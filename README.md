@@ -1,6 +1,6 @@
 # AudioPlane
 
-**Capture audio from individual Mac apps. Send audio back through the same SDK.**
+**Capture desktop output, individual Mac apps, or microphones. Send audio back through the same SDK.**
 
 AudioPlane gives Python and Node.js applications access to desktop audio without
 implementing Core Audio themselves. Listen to Chrome, Discord, Spotify, or a
@@ -87,6 +87,19 @@ name or ID from `audioplane sources`; ambiguous selections produce an error.
 Capture is **application-wide, not browser-tab-specific**. Pause other audible
 Chrome tabs if you want one video's audio. AudioPlane does not capture video
 frames or fetch website transcripts.
+
+To capture everything routed to the Mac's current default output, use the
+`system_mix` source instead of an application name:
+
+```python
+async with AudioPlane() as audio:
+    async with await audio.capture("system_mix") as stream:
+        async for frame in stream:
+            print(frame.timestamp_ns, len(frame.data))
+```
+
+`system_mix` excludes the Runtime's own playback and does not include the
+microphone. The capture follows the default output device when it changes.
 
 ## What happens after capture?
 
